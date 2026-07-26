@@ -188,6 +188,11 @@ function saveName(name) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: oldName, enabled: false })
     });
+    fetch('/api/voice-target', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: myName, enabled: true })
+    });
     if (es) es.close();
   }
   connectSSE();
