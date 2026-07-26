@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,10 +11,23 @@ const PORT = process.env.PORT || 3777;
 app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '50mb' }));
 
+const DATA_FILE = path.join(__dirname, 'voice-state.json');
+
+function loadState() {
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch {
+    return { voiceTargets: [] };
+  }
+}
+
+function saveState() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify({ voiceTargets: [...voiceTargets] }));
+}
+
+let state = loadState();
+let voiceTargets = new Set(state.voiceTargets);
 let clients = new Map();
-let activeTargets = [];
-let outputMode = 'dual';
-let eviAvailable = false;
 const sseClients = new Map();
 
 app.get('/events', (req, res) => {
@@ -25,93 +39,113 @@ app.get('/events', (req, res) => {
     'Access-Control-Allow-Origin': '*'
   });
 
-  clients.set(name, { name, connected: true, lastSeen: Date.now() });
+  clients.set(name, {
+    name,
+    connected: true,
+    voiceEnabled: voiceTargets.has(name),
+    lastSeen: Date.now()
+  });
   sseClients.set(name, res);
 
   res.write(`data: ${JSON.stringify({
     type: 'connected',
-    clients: Array.from(clients.keys()),
-    activeTargets,
-    eviAvailable
+    clients: getClientList(),
+    voiceTargets: [...voiceTargets]
   })}\n\n`);
 
-  broadcastClients();
+  broadcastClientList();
 
   req.on('close', () => {
+    if (clients.has(name)) {
+      clients.get(name).connected = false;
+    }
     sseClients.delete(name);
-    clients.delete(name);
-    broadcastClients();
+    broadcastClientList();
   });
 });
 
-function broadcast(event, targetName) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  if (targetName) {
-    const res = sseClients.get(targetName);
-    if (res) res.write(data);
-  } else {
-    sseClients.forEach((res) => res.write(data));
-  }
+function getClientList() {
+  return [...clients.entries()].map(([name, c]) => ({
+    name,
+    connected: c.connected,
+    voiceEnabled: voiceTargets.has(name)
+  }));
 }
 
-function broadcastClients() {
+function broadcastClientList() {
   broadcast({
     type: 'clients',
-    clients: Array.from(clients.keys()),
-    activeTargets
+    clients: getClientList(),
+    voiceTargets: [...voiceTargets]
+  });
+}
+
+function broadcast(event, voiceOnly = false) {
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  sseClients.forEach((res, name) => {
+    if (voiceOnly && !voiceTargets.has(name)) return;
+    try { res.write(data); } catch {}
   });
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', eviAvailable, clients: clients.size });
+  res.json({ status: 'ok', clients: sseClients.size, voiceTargets: [...voiceTargets] });
 });
 
 app.get('/api/clients', (req, res) => {
   res.json({
-    clients: Array.from(clients.keys()),
-    activeTargets
+    clients: getClientList(),
+    voiceTargets: [...voiceTargets]
   });
 });
 
-app.post('/api/output', (req, res) => {
-  outputMode = req.body.mode || outputMode;
-  broadcast({ type: 'output_mode', mode: outputMode });
-  res.json({ mode: outputMode });
-});
+app.post('/api/voice-target', (req, res) => {
+  const { name, enabled } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
 
-app.post('/api/active-target', (req, res) => {
-  const { name } = req.body;
-  const idx = activeTargets.indexOf(name);
-  if (idx >= 0) {
-    activeTargets.splice(idx, 1);
+  if (enabled) {
+    voiceTargets.add(name);
   } else {
-    activeTargets.push(name);
+    voiceTargets.delete(name);
   }
-  broadcast({ type: 'active_targets', targets: activeTargets });
-  res.json({ targets: activeTargets });
+
+  if (clients.has(name)) {
+    clients.get(name).voiceEnabled = enabled;
+  }
+
+  saveState();
+  broadcastClientList();
+  res.json({ name, voiceEnabled: enabled, voiceTargets: [...voiceTargets] });
 });
 
 app.post('/api/notify', (req, res) => {
-  const { text, type } = req.body;
-  console.log(`[NOTIFY] ${type}: "${text}"`);
-  if (type === 'speak') {
-    broadcast({ type: 'speak', text });
-  } else {
-    broadcast({ type: 'notification', text, eventType: type });
-  }
+  const { text, eventType } = req.body;
+  console.log(`[NOTIFY] ${eventType}: "${text}"`);
+
+  broadcast({
+    type: 'notification',
+    text,
+    eventType,
+    timestamp: Date.now()
+  });
+
+  broadcast({
+    type: 'speak',
+    text,
+    lang: 'es-MX'
+  }, true);
+
   res.json({ status: 'sent' });
 });
 
 app.post('/api/tts', (req, res) => {
   const { text } = req.body;
-  console.log(`[TTS] Request: "${text}"`);
-  broadcast({ type: 'speak', text });
+  broadcast({ type: 'speak', text, lang: 'es-MX' }, true);
   res.json({ status: 'speaking' });
 });
 
 app.get('/api/tts', (req, res) => {
   const text = req.query.text || '';
-  console.log(`[TTS] Request: "${text}"`);
   const sampleRate = 16000;
   const duration = Math.min(text.length * 0.05, 10);
   const numSamples = Math.floor(sampleRate * duration);
@@ -136,11 +170,6 @@ app.get('/api/tts', (req, res) => {
   res.send(buffer);
 });
 
-app.post('/api/stt-from-browser', (req, res) => {
-  console.log('[STT] Received browser audio');
-  res.json({ text: '', status: 'received' });
-});
-
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
@@ -151,18 +180,12 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
-      console.log(`[WS] Message from ${name}:`, msg.type);
-
       if (msg.type === 'speak') {
-        broadcast({ type: 'speak', text: msg.text }, msg.target);
+        broadcast({ type: 'speak', text: msg.text, lang: 'es-MX' }, true);
       } else if (msg.type === 'listen') {
-        broadcast({ type: 'listening', active: msg.active }, msg.target);
-      } else if (msg.type === 'start_mic') {
-        broadcast({ type: 'start_mic', timeout: msg.timeout || 10 }, msg.target);
+        broadcast({ type: 'listening', active: msg.active });
       }
-    } catch (e) {
-      console.error('[WS] Parse error:', e.message);
-    }
+    } catch (e) {}
   });
 
   ws.on('close', () => {
@@ -171,30 +194,25 @@ wss.on('connection', (ws, req) => {
 });
 
 const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
-
 eviWss.on('connection', (ws) => {
-  console.log('[EVI] Client connected');
   ws.send(JSON.stringify({ type: 'evi_ready' }));
-
-  ws.on('close', () => {
-    console.log('[EVI] Client disconnected');
-  });
+  ws.on('close', () => {});
 });
 
 setInterval(() => {
   const now = Date.now();
   clients.forEach((client, name) => {
-    if (now - client.lastSeen > 60000) {
+    if (now - client.lastSeen > 300000) {
       clients.delete(name);
       sseClients.delete(name);
     }
   });
-}, 30000);
+}, 60000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  ╔══════════════════════════════════════╗`);
   console.log(`  ║   OpenCode Voice Nexus               ║`);
-  console.log(`  ║   Server running on port ${PORT}        ║`);
-  console.log(`  ║   http://localhost:${PORT}              ║`);
+  console.log(`  ║   Puerto: ${PORT}                         ║`);
+  console.log(`  ║   http://192.168.1.84:${PORT}           ║`);
   console.log(`  ╚══════════════════════════════════════╝\n`);
 });

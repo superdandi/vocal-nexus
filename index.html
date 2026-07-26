@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>opencode-voice // nexus</title>
+<title>OpenCode // Voice Nexus</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,44 +40,26 @@ body::after {
 @keyframes vizListen { 0% { transform: scale(1.1); opacity: 0.2; border-width: 2px; } 50% { transform: scale(0.95); opacity: 0.8; border-width: 1px; } 100% { transform: scale(1.1); opacity: 0.2; border-width: 2px; } }
 .holo-inner.active .viz-ring { border-color: rgba(255, 0, 255, 0.4); animation: vizExpand 1.8s ease-out infinite; }
 .holo-inner.listening .viz-ring { border-color: rgba(0, 255, 255, 0.6); animation: vizListen 2s ease-in-out infinite; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); }
-.holo-inner.evi .viz-ring { border-color: rgba(0, 255, 128, 0.5); }
-.holo-inner.evi.active .viz-ring { border-color: rgba(0, 255, 128, 0.7); animation: vizExpand 1.8s ease-out infinite; }
-.holo-inner.evi.listening .viz-ring { border-color: rgba(0, 255, 128, 0.5); animation: vizListen 2s ease-in-out infinite; box-shadow: 0 0 15px rgba(0, 255, 128, 0.2); }
 .holo-icon { font-size: 2.8rem; filter: drop-shadow(0 0 12px rgba(0, 255, 255, 0.6)); transition: all 0.3s; }
 .holo-inner.active .holo-icon { filter: drop-shadow(0 0 20px rgba(255, 0, 255, 0.8)); }
 .holo-inner.listening .holo-icon { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 1)); }
-.holo-inner.evi .holo-icon { filter: drop-shadow(0 0 25px rgba(0, 255, 128, 1)); }
-.holo-inner.evi.listening .holo-icon { filter: drop-shadow(0 0 25px rgba(0, 255, 128, 0.8)); }
 .title { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; letter-spacing: 6px; text-transform: uppercase; margin-bottom: 0.3rem; }
 .title-line { display: block; font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 300; letter-spacing: 8px; color: rgba(0, 255, 255, 0.5); margin-top: -0.3rem; }
 .status-bar { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0.8rem 0 1rem; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #333; transition: all 0.4s; }
 .dot.connected { background: #0ff; box-shadow: 0 0 12px rgba(0, 255, 255, 0.6); animation: dotPulse 1.5s ease-in-out infinite; }
-.dot.evi { background: #0f8; box-shadow: 0 0 12px rgba(0, 255, 128, 0.6); animation: dotPulse 0.8s ease-in-out infinite; }
 @keyframes dotPulse { 0%, 100% { box-shadow: 0 0 8px rgba(0, 255, 255, 0.4); } 50% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.8); } }
 #status { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 3px; text-transform: uppercase; color: #666; transition: all 0.4s; }
 #status.connected { color: #0ff; }
-#status.evi { color: #0f8; }
-.evi-btn { font-family: 'Orbitron', monospace; font-size: 0.7rem; letter-spacing: 3px; background: transparent; border: 1px solid rgba(0, 255, 255, 0.3); color: #0ff; padding: 0.6rem 1.8rem; cursor: pointer; border-radius: 4px; transition: all 0.3s; text-transform: uppercase; margin: 0.5rem 0; }
-.evi-btn:hover { border-color: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); }
-.evi-btn.active { border-color: #0f8; color: #0f8; box-shadow: 0 0 20px rgba(0, 255, 128, 0.3); background: rgba(0, 255, 128, 0.05); }
-.mic-btn-pulse { animation: micPulse 1.5s ease-in-out infinite; }
-@keyframes micPulse { 0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 255, 0.3); } 50% { box-shadow: 0 0 25px rgba(0, 255, 255, 0.8); } }
-.output-badge { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 2px; color: #0f8; cursor: pointer; margin-left: 0.5rem; padding: 2px 6px; border: 1px solid rgba(0, 255, 128, 0.3); border-radius: 3px; }
-.output-badge:hover { border-color: #0f8; box-shadow: 0 0 10px rgba(0, 255, 128, 0.2); }
 .client-bar { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; min-height: 20px; }
-.client-badge { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.3); transition: all 0.2s; background: rgba(0,0,0,0.2); }
-.client-badge:hover { border-color: rgba(0,255,255,0.3); color: rgba(255,255,255,0.7); }
-.client-badge.active { border-color: #0ff; color: #0ff; box-shadow: 0 0 8px rgba(0,255,255,0.3); background: rgba(0,255,255,0.05); }
-.client-badge.self { border-style: dashed; }
-.transcript { max-height: 320px; overflow-y: auto; text-align: left; margin: 1rem 0; padding: 0.8rem; border-radius: 8px; background: rgba(0, 255, 255, 0.03); border: 1px solid rgba(0, 255, 255, 0.08); display: none; scroll-behavior: smooth; }
-.transcript.visible { display: block; }
-.msg { padding: 0.4rem 0.6rem; margin: 0.3rem 0; border-radius: 6px; font-size: 0.9rem; line-height: 1.4; animation: msgFade 0.3s ease-out; }
-@keyframes msgFade { 0% { opacity: 0; transform: translateY(5px); } 100% { opacity: 1; transform: translateY(0); } }
-.msg.user { background: rgba(0, 255, 255, 0.06); border-left: 2px solid #0ff; }
-.msg.assistant { background: rgba(255, 0, 255, 0.06); border-left: 2px solid #f0f; }
-.msg .label { font-size: 0.6rem; letter-spacing: 2px; opacity: 0.5; text-transform: uppercase; font-family: 'Orbitron', monospace; }
-.msg .text { margin-top: 0.1rem; }
+.client-badge { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.3); transition: all 0.2s; background: rgba(0,0,0,0.2); user-select: none; }
+.client-badge:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); }
+.client-badge.voice-on { border-color: #0ff; color: #0ff; box-shadow: 0 0 8px rgba(0,255,255,0.3); background: rgba(0,255,255,0.05); }
+.client-badge.voice-on::before { content: '◆ '; }
+.client-badge.voice-off::before { content: '◇ '; }
+.client-badge.self { border-style: dashed; opacity: 0.6; pointer-events: none; }
+.client-badge.self.voice-on { opacity: 1; }
+.client-badge.self.voice-off { opacity: 0.8; }
 .speech-container { min-height: 60px; display: flex; align-items: center; justify-content: center; margin: 0.5rem 0; }
 #speech { font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 500; color: rgba(255, 255, 255, 0.85); text-shadow: 0 0 10px rgba(0, 255, 255, 0.3); transition: all 0.5s; line-height: 1.4; padding: 0.3rem 0.8rem; }
 #speech.idle { color: rgba(255, 255, 255, 0.15); font-size: 0.9rem; }
@@ -91,6 +73,25 @@ body::after {
 .particles { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 0; overflow: hidden; }
 .particle { position: absolute; width: 2px; height: 2px; background: #0ff; border-radius: 50%; animation: particleFloat linear infinite; opacity: 0; }
 @keyframes particleFloat { 0% { transform: translateY(100vh) scale(0); opacity: 0; } 10% { opacity: 0.6; } 90% { opacity: 0.6; } 100% { transform: translateY(-10vh) scale(1); opacity: 0; } }
+.notif-log { max-height: 180px; overflow-y: auto; text-align: left; margin: 0.8rem 0; padding: 0.6rem; border-radius: 8px; background: rgba(0, 255, 255, 0.02); border: 1px solid rgba(0, 255, 255, 0.06); font-size: 0.7rem; scrollbar-width: thin; scrollbar-color: rgba(0,255,255,0.2) transparent; }
+.notif-log:empty { display: none; }
+.notif-item { padding: 0.2rem 0.4rem; margin: 0.15rem 0; border-radius: 4px; animation: notifFade 0.3s ease-out; display: flex; gap: 0.5rem; }
+.notif-item .notif-time { color: rgba(0,255,255,0.3); font-family: 'Orbitron', monospace; font-size: 0.55rem; flex-shrink: 0; }
+.notif-item .notif-text { color: rgba(255,255,255,0.6); }
+.notif-item.voice { border-left: 2px solid #0ff; }
+.notif-item.text-only { border-left: 2px solid rgba(255,255,255,0.1); }
+@keyframes notifFade { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes msgFade { 0% { opacity: 0; transform: translateY(5px); } 100% { opacity: 1; transform: translateY(0); } }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+.modal-box { background: #0d0d14; border: 1px solid rgba(0,255,255,0.2); border-radius: 12px; padding: 2.5rem; max-width: 420px; width: 90%; text-align: center; box-shadow: 0 0 40px rgba(0,255,255,0.1), inset 0 0 30px rgba(0,255,255,0.02); }
+.modal-box h2 { font-family: 'Orbitron', monospace; font-size: 1.1rem; letter-spacing: 4px; color: #0ff; margin-bottom: 0.5rem; }
+.modal-box p { font-size: 0.85rem; color: rgba(255,255,255,0.4); margin-bottom: 1.5rem; line-height: 1.5; }
+.modal-box input { width: 100%; padding: 0.7rem 1rem; background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.2); border-radius: 6px; color: #0ff; font-family: 'Orbitron', monospace; font-size: 0.8rem; letter-spacing: 2px; text-align: center; outline: none; transition: all 0.3s; }
+.modal-box input:focus { border-color: #0ff; box-shadow: 0 0 15px rgba(0,255,255,0.15); }
+.modal-box input::placeholder { color: rgba(0,255,255,0.15); }
+.modal-btn { font-family: 'Orbitron', monospace; font-size: 0.7rem; letter-spacing: 3px; background: transparent; border: 1px solid rgba(0,255,255,0.3); color: #0ff; padding: 0.6rem 2rem; cursor: pointer; border-radius: 4px; transition: all 0.3s; text-transform: uppercase; margin-top: 1rem; }
+.modal-btn:hover { border-color: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); background: rgba(0,255,255,0.05); }
+.modal-hint { font-size: 0.6rem; color: rgba(255,255,255,0.2); margin-top: 0.8rem; }
 @media (max-width: 480px) { .holo-ring { width: 180px; height: 180px; } .holo-inner { width: 120px; height: 120px; } .title { font-size: 1.1rem; } #speech { font-size: 1rem; } }
 </style>
 </head>
@@ -105,68 +106,128 @@ body::after {
     </div>
   </div>
   <div class="title">OPencode<span class="title-line">⋮ voice nexus ⋮</span></div>
-  <div class="status-bar"><span class="dot" id="dot"></span><span id="status">CONECTANDO...</span> <span id="outputMode" class="output-badge">dual</span></div>
+  <div class="status-bar"><span class="dot" id="dot"></span><span id="status">CONECTANDO...</span></div>
   <div class="client-bar" id="clientBar"></div>
-  <button class="evi-btn" id="eviBtn">🎤 EVI Chat</button>
-  <button class="evi-btn" id="micBtn" style="display:none">🎤 Click para hablar</button>
   <div class="speech-container"><div id="speech" class="idle">Esperando señal...</div></div>
   <div class="viz-bars" id="vizBars"></div>
-  <div class="transcript" id="transcript"></div>
+  <div class="notif-log" id="notifLog"></div>
   <div class="footer">▸ sistema de voz neural ▸</div>
 </div>
 <audio id="audio" autoplay style="display:none"></audio>
+<div class="modal-overlay" id="nameModal" style="display:none">
+  <div class="modal-box">
+    <h2>VOICE NEXUS</h2>
+    <p>Asigna un nombre a este terminal para que los demás puedan identificarlo en la red.</p>
+    <input type="text" id="nameInput" placeholder="nombre-del-equipo" maxlength="30" autocomplete="off" spellcheck="false">
+    <button class="modal-btn" id="nameBtn">CONECTAR</button>
+    <div class="modal-hint">Enter para conectar &middot; Doble click en tu badge para renombrar</div>
+  </div>
+</div>
 <script>
 const audio = document.getElementById('audio');
 const statusEl = document.getElementById('status');
-const statusDot = document.getElementById('dot');
+const dot = document.getElementById('dot');
 const holoInner = document.getElementById('holoInner');
 const holoIcon = document.getElementById('holoIcon');
 const speech = document.getElementById('speech');
-const transcript = document.getElementById('transcript');
-const outputModeEl = document.getElementById('outputMode');
+const notifLog = document.getElementById('notifLog');
+const nameModal = document.getElementById('nameModal');
+const nameInput = document.getElementById('nameInput');
+const nameBtn = document.getElementById('nameBtn');
 const clientBar = document.getElementById('clientBar');
 
-const hostname = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? '' : location.hostname;
-const urlName = new URLSearchParams(location.search).get('name');
-let myName = urlName || localStorage.getItem('nexus_name') || hostname || prompt('Nombre para este equipo:') || 'nexus-' + Math.random().toString(36).slice(2, 6);
-if (!urlName && !localStorage.getItem('nexus_name') && (!hostname || hostname === '')) {
-  localStorage.setItem('nexus_name', myName);
-}
+let myName = localStorage.getItem('nexus_name');
 let clientList = [];
-let activeTargets = [];
-let eviAvailable = true;
+let voiceTargets = [];
+let speechUnlocked = false;
+let speaking = false;
+let listening = false;
 
-const modes = ['dual', 'browser', 'local'];
-outputModeEl.addEventListener('click', () => {
-  const current = modes.indexOf(outputModeEl.textContent);
-  const next = modes[(current + 1) % modes.length];
-  fetch('/api/output', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: next }) })
-    .then(r => r.json()).then(d => { if (d.mode) outputModeEl.textContent = d.mode; }).catch(() => {});
+function showModal() {
+  nameModal.style.display = 'flex';
+  nameInput.value = myName || '';
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function hideModal() {
+  nameModal.style.display = 'none';
+}
+
+function saveName(name) {
+  myName = name.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
+  localStorage.setItem('nexus_name', myName);
+  hideModal();
+  connectSSE();
+}
+
+if (!myName) {
+  showModal();
+}
+
+nameBtn.addEventListener('click', () => {
+  const val = nameInput.value.trim();
+  if (val) saveName(val);
 });
+nameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const val = nameInput.value.trim();
+    if (val) saveName(val);
+  }
+});
+
+function unlockSpeech() {
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  try {
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+document.addEventListener('click', unlockSpeech, { once: true });
+document.addEventListener('touchstart', unlockSpeech, { once: true });
 
 function renderClients(clients, targets) {
   clientBar.innerHTML = '';
-  clients.forEach(name => {
-    const isActive = targets.includes(name);
+  const sorted = [...clients].sort((a, b) => {
+    if (a.name === myName) return -1;
+    if (b.name === myName) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  sorted.forEach(c => {
     const badge = document.createElement('span');
-    badge.className = 'client-badge';
-    if (isActive) badge.classList.add('active');
-    if (name === myName) badge.classList.add('self');
-    badge.textContent = isActive ? `◆ ${name}` : `◇ ${name}`;
-    badge.title = name === myName ? 'Click toggle | Doble click renombrar' : `Click para toggle ${name}`;
-    badge.addEventListener('click', () => {
-      fetch('/api/active-target', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
-        .catch(() => {});
-    });
-    badge.addEventListener('dblclick', () => {
-      if (name === myName) {
-        const newName = prompt('Nombre para este equipo:', myName);
-        if (newName && newName !== myName) {
-          localStorage.setItem('nexus_name', newName);
-          location.reload();
+    const isSelf = c.name === myName;
+    const isVoiceOn = targets.includes(c.name);
+    badge.className = 'client-badge ' + (isVoiceOn ? 'voice-on' : 'voice-off') + (isSelf ? ' self' : '');
+    badge.textContent = c.name;
+    if (!isSelf) {
+      badge.title = isVoiceOn ? `Voz ACTIVADA para ${c.name} — click para desactivar` : `Voz desactivada para ${c.name} — click para activar`;
+      badge.addEventListener('click', () => {
+        fetch('/api/voice-target', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: c.name, enabled: !isVoiceOn })
+        });
+      });
+    } else {
+      badge.title = 'Doble click para renombrar este terminal';
+      badge.addEventListener('dblclick', () => {
+        const newName = prompt('Nuevo nombre para este terminal:', myName);
+        if (newName && newName.trim() && newName.trim() !== myName) {
+          const oldName = myName;
+          myName = newName.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
+          localStorage.setItem('nexus_name', myName);
+          fetch('/api/voice-target', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: oldName, enabled: false })
+          });
+          es.close();
+          connectSSE();
         }
-      }
-    });
+      });
+    }
     clientBar.appendChild(badge);
   });
 }
@@ -175,24 +236,23 @@ for (let i = 0; i < 20; i++) {
   const bar = document.createElement('div');
   bar.className = 'viz-bar';
   bar.style.animationDelay = `${i * 0.04}s`;
-  vizBars.appendChild(bar);
+  document.getElementById('vizBars').appendChild(bar);
 }
-const bars = vizBars.querySelectorAll('.viz-bar');
+const bars = document.getElementById('vizBars').querySelectorAll('.viz-bar');
 
 const particles = document.getElementById('particles');
 for (let i = 0; i < 30; i++) {
   const p = document.createElement('div');
   p.className = 'particle';
   p.style.left = `${Math.random() * 100}%`;
-  p.style.width = `${1 + Math.random() * 2}px`; p.style.height = p.style.width;
+  p.style.width = `${1 + Math.random() * 2}px`;
+  p.style.height = p.style.width;
   p.style.animationDuration = `${10 + Math.random() * 20}s`;
   p.style.animationDelay = `${Math.random() * 20}s`;
   p.style.background = ['#0ff', '#f0f', '#ff0', '#fff'][Math.floor(Math.random() * 4)];
   particles.appendChild(p);
 }
 
-let speaking = false;
-let listening = false;
 function setSpeaking(active) {
   speaking = active;
   if (active) listening = false;
@@ -203,24 +263,6 @@ function setSpeaking(active) {
   holoIcon.textContent = active ? '◉' : listening ? '◎' : '◈';
 }
 
-function speakText(text) {
-  if (!text) return;
-  speech.textContent = text;
-  setSpeaking(true);
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'es-ES';
-    utter.rate = 1.0;
-    utter.pitch = 1.0;
-    utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utter);
-  } else {
-    audio.src = '/api/tts?text=' + encodeURIComponent(text);
-    audio.play();
-  }
-}
 function setListening(active) {
   listening = active;
   if (active) speaking = false;
@@ -232,98 +274,91 @@ function setListening(active) {
 }
 
 function setConnected(connected) {
-  dot.className = 'dot ' + (connected ? 'connected' : 'disconnected');
+  dot.className = 'dot ' + (connected ? 'connected' : '');
   statusEl.textContent = connected ? 'CONECTADO' : 'DESCONECTADO';
   statusEl.className = connected ? 'connected' : '';
-  if (!connected) { setSpeaking(false); setListening(false); setEviMode(false); }
+  if (!connected) { setSpeaking(false); setListening(false); }
 }
 
-function updateEviButton() {
-  eviBtn.style.display = eviAvailable ? '' : 'none';
-  if (!eviAvailable && eviWs) stopEvi();
-}
-
-function setEviMode(active) {
-  holoInner.classList.toggle('evi', active);
-  dot.className = 'dot ' + (active ? 'evi' : 'connected');
-  statusEl.textContent = active ? '🎙 EVI ACTIVO' : 'CONECTADO';
-  statusEl.className = active ? 'evi' : 'connected';
-  eviBtn.textContent = active ? '⏹ Detener' : '🎤 EVI Chat';
-  eviBtn.classList.toggle('active', active);
-  transcript.classList.toggle('visible', active);
-  if (!active) {
-    holoInner.classList.remove('evi', 'active', 'listening');
-    bars.forEach(b => b.classList.remove('active', 'listening'));
+function speakText(text) {
+  if (!text) return;
+  speech.textContent = text;
+  setSpeaking(true);
+  if (!speechUnlocked) {
+    unlockSpeech();
+  }
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'es-MX';
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utter);
+  } else {
+    audio.src = '/api/tts?text=' + encodeURIComponent(text);
+    audio.play();
   }
 }
 
-function addMsg(role, text) {
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  div.innerHTML = `<div class="label">${role === 'user' ? '👤 TÚ' : '🤖 EVI'}</div><div class="text">${text}</div>`;
-  transcript.appendChild(div);
-  transcript.scrollTop = transcript.scrollHeight;
+function addNotif(text, voice) {
+  const item = document.createElement('div');
+  item.className = 'notif-item ' + (voice ? 'voice' : 'text-only');
+  const now = new Date();
+  const ts = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  item.innerHTML = `<span class="notif-time">${ts}</span><span class="notif-text">${text}</span>`;
+  notifLog.prepend(item);
+  while (notifLog.children.length > 50) {
+    notifLog.removeChild(notifLog.lastChild);
+  }
 }
 
-// === EVI WebSocket (receive-only, no mic) ===
-let eviWs = null;
+let es = null;
 
-function startEvi() {
-  if (eviWs) return;
-  setEviMode(true);
-  speech.textContent = 'Conectando con EVI...';
-  transcript.innerHTML = '';
-
-  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  eviWs = new WebSocket(`${wsProto}//${location.host}/ws/evi`);
-  eviWs.onopen = () => { speech.textContent = 'EVI listo — habla normalmente'; };
-  eviWs.onmessage = (e) => {
+function connectSSE() {
+  if (es) es.close();
+  es = new EventSource('/events?name=' + encodeURIComponent(myName));
+  es.onopen = () => setConnected(true);
+  es.onmessage = (e) => {
     try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'evi_ready') {
-        speech.textContent = 'EVI conectado — puedes hablar';
-      } else if (msg.type === 'audio_output' && msg.data) {
-        const raw = atob(msg.data);
-        const pcm = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) pcm[i] = raw.charCodeAt(i);
-        const wav = pcmToWav(pcm.buffer, 16000);
-        const blob = new Blob([wav], { type: 'audio/wav' });
-        audio.src = URL.createObjectURL(blob);
-        audio.play();
-        setSpeaking(true);
-        audio.onended = () => setSpeaking(false);
-      } else if (msg.type === 'user_message' && msg.message?.content) {
-        addMsg('user', msg.message.content);
-        speech.textContent = msg.message.content;
-      } else if (msg.type === 'assistant_message' && msg.message?.content) {
-        addMsg('assistant', msg.message.content);
-        speech.textContent = msg.message.content;
-      } else if (msg.type === 'user_interruption') {
-        setSpeaking(false);
-        speech.textContent = '(te escucho...)';
+      const d = JSON.parse(e.data);
+      if (d.type === 'connected') {
+        clientList = d.clients || [];
+        voiceTargets = d.voiceTargets || [];
+        renderClients(clientList, voiceTargets);
+      } else if (d.type === 'clients') {
+        clientList = d.clients || [];
+        voiceTargets = d.voiceTargets || [];
+        renderClients(clientList, voiceTargets);
+      } else if (d.type === 'notification') {
+        const amIVoiceTarget = voiceTargets.includes(myName);
+        addNotif(d.text, amIVoiceTarget);
+      } else if (d.type === 'speak') {
+        speakText(d.text);
+        addNotif(d.text, true);
+      } else if (d.type === 'show_text') {
+        speech.textContent = d.text;
+      } else if (d.type === 'listening') {
+        setListening(d.active);
+        if (d.active) speech.textContent = 'Escuchando...';
+      } else if (d.type === 'start_mic') {
+        setListening(true);
+        speech.textContent = 'Grabando...';
+        startMicCapture(d.timeout || 10);
       }
     } catch(err) {}
   };
-  eviWs.onclose = () => {
-    eviWs = null;
-    setEviMode(false);
-    speech.textContent = 'EVI desconectado';
-    setSpeaking(false);
-  };
-  eviWs.onerror = () => {
-    eviWs = null;
-    setEviMode(false);
-    speech.textContent = 'Error de conexión EVI';
-  };
+  es.onerror = () => setConnected(false);
 }
 
-function stopEvi() {
-  if (eviWs) { eviWs.close(); }
+if (myName) {
+  connectSSE();
 }
 
-eviBtn.addEventListener('click', () => {
-  if (eviWs) { stopEvi(); } else { startEvi(); }
-});
+audio.onended = () => setSpeaking(false);
+audio.onerror = () => { setSpeaking(false); speech.textContent = '(Error audio)'; };
+setInterval(() => { if (es && es.readyState === EventSource.CLOSED) setConnected(false); }, 2000);
 
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;
@@ -351,145 +386,37 @@ function pcmToWav(pcmData, sampleRate) {
   return buffer;
 }
 
-// === Browser Mic Capture ===
 let micRecorder = null;
 let micStream = null;
 let micChunks = [];
 let micTimeoutId = null;
-let micResolve = null;
-const micBtn = document.getElementById('micBtn');
 
-function micBtnClickHandler() {
-  if (!micResolve) return;
-  micBtn.style.display = 'none';
-  micBtn.classList.remove('mic-btn-pulse');
-  speech.textContent = '🎤 Grabando...';
+function startMicCapture(timeout) {
+  if (micRecorder) return;
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices) return;
+  speech.textContent = 'Grabando...';
   setListening(true);
-  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    fetch('/api/stt-from-browser', { method: 'POST', body: '' });
-    return;
-  }
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
       micStream = stream;
       micChunks = [];
       const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
       let mimeType = '';
-      for (const t of types) {
-        if (MediaRecorder.isTypeSupported(t)) { mimeType = t; break; }
-      }
+      for (const t of types) { if (MediaRecorder.isTypeSupported(t)) { mimeType = t; break; } }
       micRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-      micRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) micChunks.push(e.data);
-      };
-      micRecorder.onerror = () => console.error('[Voice] MediaRecorder error');
+      micRecorder.ondataavailable = (e) => { if (e.data.size > 0) micChunks.push(e.data); };
       micRecorder.onstop = () => {
         setListening(false);
-        const blob = new Blob(micChunks, { type: mimeType || 'audio/webm' });
-        if (blob.size > 100) {
-          fetch('/api/stt-from-browser', { method: 'POST', body: blob })
-            .then(r => r.json())
-            .then(d => { if (d.text) speech.textContent = d.text; })
-            .catch(() => {});
-        } else {
-          fetch('/api/stt-from-browser', { method: 'POST', body: '' });
-        }
         micStream.getTracks().forEach(t => t.stop());
         micRecorder = null;
         micStream = null;
       };
       micRecorder.start(100);
       clearTimeout(micTimeoutId);
-      micTimeoutId = setTimeout(() => {
-        if (micRecorder && micRecorder.state === 'recording') micRecorder.stop();
-      }, 10000);
+      micTimeoutId = setTimeout(() => { if (micRecorder && micRecorder.state === 'recording') micRecorder.stop(); }, timeout * 1000);
     })
-    .catch(err => {
-      setListening(false);
-      const msg = '[Voice] Mic error: ' + (err.message || 'unknown');
-      console.error(msg);
-      fetch('/api/stt-from-browser', { method: 'POST', body: msg });
-    });
+    .catch(() => setListening(false));
 }
-
-micBtn.addEventListener('click', micBtnClickHandler);
-
-function startMicCapture(timeout) {
-  if (micRecorder) return;
-  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    fetch('/api/stt-from-browser', { method: 'POST', body: '' });
-    return;
-  }
-  speech.textContent = '🎤 Click para hablar';
-  micBtn.textContent = '🎤 Click para hablar';
-  micBtn.style.display = 'inline-block';
-  micBtn.classList.add('mic-btn-pulse');
-  micResolve = true;
-  clearTimeout(micTimeoutId);
-  micTimeoutId = setTimeout(() => {
-    micBtn.style.display = 'none';
-    micBtn.classList.remove('mic-btn-pulse');
-    if (micResolve) { micResolve = null; fetch('/api/stt-from-browser', { method: 'POST', body: '' }); }
-  }, timeout * 1000);
-}
-
-// === SSE ===
-const es = new EventSource('/events?name=' + encodeURIComponent(myName));
-es.onopen = () => {
-  setConnected(true);
-  fetch('/api/health').then(r => r.json()).then(d => {
-    if (d.eviAvailable !== undefined) { eviAvailable = d.eviAvailable; updateEviButton(); }
-  }).catch(() => {});
-  fetch('/api/clients').then(r => r.json()).then(d => {
-    if (d.clients) { clientList = d.clients; activeTargets = d.activeTargets || []; renderClients(d.clients, activeTargets); }
-  }).catch(() => {});
-};
-es.onmessage = (e) => {
-  try {
-    const d = JSON.parse(e.data);
-    if (d.type === 'connected') {
-      if (d.clients) { clientList = d.clients; activeTargets = d.activeTargets || []; renderClients(d.clients, activeTargets); }
-      if (d.eviAvailable !== undefined) { eviAvailable = d.eviAvailable; updateEviButton(); }
-    } else if (d.type === 'evi_status') {
-      eviAvailable = d.available;
-      updateEviButton();
-    } else if (d.type === 'speak' || d.type === 'notification') {
-      speakText(d.text);
-    } else if (d.type === 'show_text') {
-      speech.textContent = d.text;
-    } else if (d.type === 'listening') {
-      setListening(d.active);
-      if (d.active) speech.textContent = '🎤 Escuchando...';
-    } else if (d.type === 'start_mic') {
-      setListening(true);
-      speech.textContent = '🎤 Escuchando...';
-      startMicCapture(d.timeout || 10);
-    } else if (d.type === 'start_evi') {
-      if (eviAvailable && !eviWs) startEvi();
-    } else if (d.type === 'output_mode') {
-      if (outputModeEl) outputModeEl.textContent = d.mode;
-    } else if (d.type === 'clients') {
-      clientList = d.clients;
-      activeTargets = d.activeTargets || [];
-      renderClients(d.clients, activeTargets);
-    } else if (d.type === 'active_targets') {
-      activeTargets = d.targets || [];
-      renderClients(clientList, activeTargets);
-    }
-  } catch(err) {}
-};
-es.onerror = () => setConnected(false);
-audio.onended = () => setSpeaking(false);
-audio.onerror = () => {
-  console.error('[Voice] TTS playback error');
-  setSpeaking(false);
-  speech.textContent = '(Error reproduciendo audio)';
-};
-setInterval(() => {
-  if (es.readyState === EventSource.CLOSED) setConnected(false);
-}, 2000);
-
-updateEviButton();
 </script>
 </body>
 </html>
