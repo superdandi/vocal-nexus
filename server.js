@@ -131,8 +131,8 @@ app.post('/api/voice-target', (req, res) => {
 });
 
 app.post('/api/notify', (req, res) => {
-  const { text, eventType, target } = req.body;
-  console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` → ${target}` : ''}`);
+  const { text, eventType, target, broadcast: isBroadcast } = req.body;
+  console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` → ${target}` : ''}${isBroadcast ? ' [BROADCAST]' : ''}`);
 
   broadcast({
     type: 'notification',
@@ -145,9 +145,9 @@ app.post('/api/notify', (req, res) => {
     type: 'speak',
     text,
     lang: 'es-MX'
-  }, true, target || null);
+  }, !isBroadcast, target || null);
 
-  res.json({ status: 'sent' });
+  res.json({ status: 'sent', broadcast: !!isBroadcast });
 });
 
 app.post('/api/tts', (req, res) => {
