@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>opencode-voice // nexus</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f; color: #c0c0e0;
+  font-family: 'Rajdhani', sans-serif; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center; overflow-x: hidden;
+}
+body::before {
+  content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px; z-index: 0; animation: gridPulse 4s ease-in-out infinite;
+}
+@keyframes gridPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+body::after {
+  content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 255, 0.03) 2px, rgba(0, 255, 255, 0.03) 4px);
+  pointer-events: none; z-index: 10;
+}
+.container { position: relative; z-index: 1; text-align: center; padding: 2rem; max-width: 720px; width: 100%; }
+.holo-ring { position: relative; width: 240px; height: 240px; margin: 0 auto 1.5rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.holo-ring::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; background: conic-gradient(from 0deg, transparent, #0ff, transparent, #f0f, transparent, #0ff, transparent) border-box; -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: rotateRing 6s linear infinite; }
+.holo-ring::after { content: ''; position: absolute; inset: 10px; border-radius: 50%; border: 1px solid rgba(0, 255, 255, 0.15); box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), inset 0 0 20px rgba(0, 255, 255, 0.05); animation: pulseRing 3s ease-in-out infinite; }
+@keyframes rotateRing { to { transform: rotate(360deg); } }
+@keyframes pulseRing { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.05); opacity: 1; } }
+.holo-inner { position: relative; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(0, 255, 255, 0.08) 0%, transparent 70%); animation: holoBreathe 4s ease-in-out infinite; display: flex; align-items: center; justify-content: center; }
+@keyframes holoBreathe { 0%, 100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.08); opacity: 1; } }
+.viz-ring { position: absolute; border-radius: 50%; border: 1px solid rgba(0, 255, 255, 0.2); animation: vizExpand 2.5s ease-out infinite; }
+.viz-ring:nth-child(1) { inset: -10px; animation-delay: 0s; }
+.viz-ring:nth-child(2) { inset: -20px; animation-delay: 0.4s; }
+.viz-ring:nth-child(3) { inset: -30px; animation-delay: 0.8s; }
+.viz-ring:nth-child(4) { inset: -40px; animation-delay: 1.2s; }
+@keyframes vizExpand { 0% { transform: scale(0.8); opacity: 0.6; } 100% { transform: scale(1.3); opacity: 0; } }
+@keyframes vizListen { 0% { transform: scale(1.1); opacity: 0.2; border-width: 2px; } 50% { transform: scale(0.95); opacity: 0.8; border-width: 1px; } 100% { transform: scale(1.1); opacity: 0.2; border-width: 2px; } }
+.holo-inner.active .viz-ring { border-color: rgba(255, 0, 255, 0.4); animation: vizExpand 1.8s ease-out infinite; }
+.holo-inner.listening .viz-ring { border-color: rgba(0, 255, 255, 0.6); animation: vizListen 2s ease-in-out infinite; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); }
+.holo-inner.evi .viz-ring { border-color: rgba(0, 255, 128, 0.5); }
+.holo-inner.evi.active .viz-ring { border-color: rgba(0, 255, 128, 0.7); animation: vizExpand 1.8s ease-out infinite; }
+.holo-inner.evi.listening .viz-ring { border-color: rgba(0, 255, 128, 0.5); animation: vizListen 2s ease-in-out infinite; box-shadow: 0 0 15px rgba(0, 255, 128, 0.2); }
+.holo-icon { font-size: 2.8rem; filter: drop-shadow(0 0 12px rgba(0, 255, 255, 0.6)); transition: all 0.3s; }
+.holo-inner.active .holo-icon { filter: drop-shadow(0 0 20px rgba(255, 0, 255, 0.8)); }
+.holo-inner.listening .holo-icon { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 1)); }
+.holo-inner.evi .holo-icon { filter: drop-shadow(0 0 25px rgba(0, 255, 128, 1)); }
+.holo-inner.evi.listening .holo-icon { filter: drop-shadow(0 0 25px rgba(0, 255, 128, 0.8)); }
+.title { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; letter-spacing: 6px; text-transform: uppercase; margin-bottom: 0.3rem; }
+.title-line { display: block; font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; font-weight: 300; letter-spacing: 8px; color: rgba(0, 255, 255, 0.5); margin-top: -0.3rem; }
+.status-bar { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0.8rem 0 1rem; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #333; transition: all 0.4s; }
+.dot.connected { background: #0ff; box-shadow: 0 0 12px rgba(0, 255, 255, 0.6); animation: dotPulse 1.5s ease-in-out infinite; }
+.dot.evi { background: #0f8; box-shadow: 0 0 12px rgba(0, 255, 128, 0.6); animation: dotPulse 0.8s ease-in-out infinite; }
+@keyframes dotPulse { 0%, 100% { box-shadow: 0 0 8px rgba(0, 255, 255, 0.4); } 50% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.8); } }
+#status { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 3px; text-transform: uppercase; color: #666; transition: all 0.4s; }
+#status.connected { color: #0ff; }
+#status.evi { color: #0f8; }
+.evi-btn { font-family: 'Orbitron', monospace; font-size: 0.7rem; letter-spacing: 3px; background: transparent; border: 1px solid rgba(0, 255, 255, 0.3); color: #0ff; padding: 0.6rem 1.8rem; cursor: pointer; border-radius: 4px; transition: all 0.3s; text-transform: uppercase; margin: 0.5rem 0; }
+.evi-btn:hover { border-color: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); }
+.evi-btn.active { border-color: #0f8; color: #0f8; box-shadow: 0 0 20px rgba(0, 255, 128, 0.3); background: rgba(0, 255, 128, 0.05); }
+.mic-btn-pulse { animation: micPulse 1.5s ease-in-out infinite; }
+@keyframes micPulse { 0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 255, 0.3); } 50% { box-shadow: 0 0 25px rgba(0, 255, 255, 0.8); } }
+.output-badge { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 2px; color: #0f8; cursor: pointer; margin-left: 0.5rem; padding: 2px 6px; border: 1px solid rgba(0, 255, 128, 0.3); border-radius: 3px; }
+.output-badge:hover { border-color: #0f8; box-shadow: 0 0 10px rgba(0, 255, 128, 0.2); }
+.client-bar { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; min-height: 20px; }
+.client-badge { font-family: 'Rajdhani', sans-serif; font-size: 0.65rem; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.3); transition: all 0.2s; background: rgba(0,0,0,0.2); }
+.client-badge:hover { border-color: rgba(0,255,255,0.3); color: rgba(255,255,255,0.7); }
+.client-badge.active { border-color: #0ff; color: #0ff; box-shadow: 0 0 8px rgba(0,255,255,0.3); background: rgba(0,255,255,0.05); }
+.client-badge.self { border-style: dashed; }
+.transcript { max-height: 320px; overflow-y: auto; text-align: left; margin: 1rem 0; padding: 0.8rem; border-radius: 8px; background: rgba(0, 255, 255, 0.03); border: 1px solid rgba(0, 255, 255, 0.08); display: none; scroll-behavior: smooth; }
+.transcript.visible { display: block; }
+.msg { padding: 0.4rem 0.6rem; margin: 0.3rem 0; border-radius: 6px; font-size: 0.9rem; line-height: 1.4; animation: msgFade 0.3s ease-out; }
+@keyframes msgFade { 0% { opacity: 0; transform: translateY(5px); } 100% { opacity: 1; transform: translateY(0); } }
+.msg.user { background: rgba(0, 255, 255, 0.06); border-left: 2px solid #0ff; }
+.msg.assistant { background: rgba(255, 0, 255, 0.06); border-left: 2px solid #f0f; }
+.msg .label { font-size: 0.6rem; letter-spacing: 2px; opacity: 0.5; text-transform: uppercase; font-family: 'Orbitron', monospace; }
+.msg .text { margin-top: 0.1rem; }
+.speech-container { min-height: 60px; display: flex; align-items: center; justify-content: center; margin: 0.5rem 0; }
+#speech { font-family: 'Rajdhani', sans-serif; font-size: 1.3rem; font-weight: 500; color: rgba(255, 255, 255, 0.85); text-shadow: 0 0 10px rgba(0, 255, 255, 0.3); transition: all 0.5s; line-height: 1.4; padding: 0.3rem 0.8rem; }
+#speech.idle { color: rgba(255, 255, 255, 0.15); font-size: 0.9rem; }
+.viz-bars { display: flex; align-items: flex-end; gap: 2px; justify-content: center; height: 24px; margin: 0.5rem 0; }
+.viz-bar { width: 3px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; opacity: 0; transition: opacity 0.3s; }
+.viz-bar.active { opacity: 0.6; animation: barAnim 0.5s ease-in-out infinite alternate; }
+.viz-bar.listening { opacity: 0.4; background: linear-gradient(to top, #0ff, #0ff); animation: barListen 0.8s ease-in-out infinite alternate; }
+@keyframes barAnim { 0% { height: 3px; } 100% { height: 24px; } }
+@keyframes barListen { 0% { height: 4px; } 50% { height: 14px; } 100% { height: 4px; } }
+.footer { margin-top: 1.5rem; font-size: 0.6rem; font-family: 'Orbitron', monospace; letter-spacing: 4px; color: rgba(255, 255, 255, 0.06); text-transform: uppercase; }
+.particles { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.particle { position: absolute; width: 2px; height: 2px; background: #0ff; border-radius: 50%; animation: particleFloat linear infinite; opacity: 0; }
+@keyframes particleFloat { 0% { transform: translateY(100vh) scale(0); opacity: 0; } 10% { opacity: 0.6; } 90% { opacity: 0.6; } 100% { transform: translateY(-10vh) scale(1); opacity: 0; } }
+@media (max-width: 480px) { .holo-ring { width: 180px; height: 180px; } .holo-inner { width: 120px; height: 120px; } .title { font-size: 1.1rem; } #speech { font-size: 1rem; } }
+</style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div class="container">
+  <div class="holo-ring">
+    <div class="holo-inner" id="holoInner">
+      <span class="viz-ring"></span><span class="viz-ring"></span>
+      <span class="viz-ring"></span><span class="viz-ring"></span>
+      <span class="holo-icon" id="holoIcon">◈</span>
+    </div>
+  </div>
+  <div class="title">OPencode<span class="title-line">⋮ voice nexus ⋮</span></div>
+  <div class="status-bar"><span class="dot" id="dot"></span><span id="status">CONECTANDO...</span> <span id="outputMode" class="output-badge">dual</span></div>
+  <div class="client-bar" id="clientBar"></div>
+  <button class="evi-btn" id="eviBtn">🎤 EVI Chat</button>
+  <button class="evi-btn" id="micBtn" style="display:none">🎤 Click para hablar</button>
+  <div class="speech-container"><div id="speech" class="idle">Esperando señal...</div></div>
+  <div class="viz-bars" id="vizBars"></div>
+  <div class="transcript" id="transcript"></div>
+  <div class="footer">▸ sistema de voz neural ▸</div>
+</div>
+<audio id="audio" autoplay style="display:none"></audio>
+<script>
+const audio = document.getElementById('audio');
+const statusEl = document.getElementById('status');
+const statusDot = document.getElementById('dot');
+const holoInner = document.getElementById('holoInner');
+const holoIcon = document.getElementById('holoIcon');
+const speech = document.getElementById('speech');
+const transcript = document.getElementById('transcript');
+const outputModeEl = document.getElementById('outputMode');
+const clientBar = document.getElementById('clientBar');
+
+const hostname = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? '' : location.hostname;
+const urlName = new URLSearchParams(location.search).get('name');
+let myName = urlName || localStorage.getItem('nexus_name') || hostname || prompt('Nombre para este equipo:') || 'nexus-' + Math.random().toString(36).slice(2, 6);
+if (!urlName && !localStorage.getItem('nexus_name') && (!hostname || hostname === '')) {
+  localStorage.setItem('nexus_name', myName);
+}
+let clientList = [];
+let activeTargets = [];
+let eviAvailable = true;
+
+const modes = ['dual', 'browser', 'local'];
+outputModeEl.addEventListener('click', () => {
+  const current = modes.indexOf(outputModeEl.textContent);
+  const next = modes[(current + 1) % modes.length];
+  fetch('/api/output', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: next }) })
+    .then(r => r.json()).then(d => { if (d.mode) outputModeEl.textContent = d.mode; }).catch(() => {});
+});
+
+function renderClients(clients, targets) {
+  clientBar.innerHTML = '';
+  clients.forEach(name => {
+    const isActive = targets.includes(name);
+    const badge = document.createElement('span');
+    badge.className = 'client-badge';
+    if (isActive) badge.classList.add('active');
+    if (name === myName) badge.classList.add('self');
+    badge.textContent = isActive ? `◆ ${name}` : `◇ ${name}`;
+    badge.title = name === myName ? 'Click toggle | Doble click renombrar' : `Click para toggle ${name}`;
+    badge.addEventListener('click', () => {
+      fetch('/api/active-target', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })
+        .catch(() => {});
+    });
+    badge.addEventListener('dblclick', () => {
+      if (name === myName) {
+        const newName = prompt('Nombre para este equipo:', myName);
+        if (newName && newName !== myName) {
+          localStorage.setItem('nexus_name', newName);
+          location.reload();
+        }
+      }
+    });
+    clientBar.appendChild(badge);
+  });
+}
+
+for (let i = 0; i < 20; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'viz-bar';
+  bar.style.animationDelay = `${i * 0.04}s`;
+  vizBars.appendChild(bar);
+}
+const bars = vizBars.querySelectorAll('.viz-bar');
+
+const particles = document.getElementById('particles');
+for (let i = 0; i < 30; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.left = `${Math.random() * 100}%`;
+  p.style.width = `${1 + Math.random() * 2}px`; p.style.height = p.style.width;
+  p.style.animationDuration = `${10 + Math.random() * 20}s`;
+  p.style.animationDelay = `${Math.random() * 20}s`;
+  p.style.background = ['#0ff', '#f0f', '#ff0', '#fff'][Math.floor(Math.random() * 4)];
+  particles.appendChild(p);
+}
+
+let speaking = false;
+let listening = false;
+function setSpeaking(active) {
+  speaking = active;
+  if (active) listening = false;
+  holoInner.classList.toggle('active', active);
+  if (active) holoInner.classList.remove('listening');
+  speech.classList.toggle('idle', !active && !listening);
+  bars.forEach(b => { b.classList.toggle('active', active); if (active) b.classList.remove('listening'); });
+  holoIcon.textContent = active ? '◉' : listening ? '◎' : '◈';
+}
+function setListening(active) {
+  listening = active;
+  if (active) speaking = false;
+  holoInner.classList.toggle('listening', active);
+  if (active) holoInner.classList.remove('active');
+  speech.classList.toggle('idle', !active && !speaking);
+  bars.forEach(b => { b.classList.toggle('listening', active); if (active) b.classList.remove('active'); });
+  holoIcon.textContent = active ? '◎' : speaking ? '◉' : '◈';
+}
+
+function setConnected(connected) {
+  dot.className = 'dot ' + (connected ? 'connected' : 'disconnected');
+  statusEl.textContent = connected ? 'CONECTADO' : 'DESCONECTADO';
+  statusEl.className = connected ? 'connected' : '';
+  if (!connected) { setSpeaking(false); setListening(false); setEviMode(false); }
+}
+
+function updateEviButton() {
+  eviBtn.style.display = eviAvailable ? '' : 'none';
+  if (!eviAvailable && eviWs) stopEvi();
+}
+
+function setEviMode(active) {
+  holoInner.classList.toggle('evi', active);
+  dot.className = 'dot ' + (active ? 'evi' : 'connected');
+  statusEl.textContent = active ? '🎙 EVI ACTIVO' : 'CONECTADO';
+  statusEl.className = active ? 'evi' : 'connected';
+  eviBtn.textContent = active ? '⏹ Detener' : '🎤 EVI Chat';
+  eviBtn.classList.toggle('active', active);
+  transcript.classList.toggle('visible', active);
+  if (!active) {
+    holoInner.classList.remove('evi', 'active', 'listening');
+    bars.forEach(b => b.classList.remove('active', 'listening'));
+  }
+}
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = `<div class="label">${role === 'user' ? '👤 TÚ' : '🤖 EVI'}</div><div class="text">${text}</div>`;
+  transcript.appendChild(div);
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+// === EVI WebSocket (receive-only, no mic) ===
+let eviWs = null;
+
+function startEvi() {
+  if (eviWs) return;
+  setEviMode(true);
+  speech.textContent = 'Conectando con EVI...';
+  transcript.innerHTML = '';
+
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  eviWs = new WebSocket(`${wsProto}//${location.host}/ws/evi`);
+  eviWs.onopen = () => { speech.textContent = 'EVI listo — habla normalmente'; };
+  eviWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'evi_ready') {
+        speech.textContent = 'EVI conectado — puedes hablar';
+      } else if (msg.type === 'audio_output' && msg.data) {
+        const raw = atob(msg.data);
+        const pcm = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) pcm[i] = raw.charCodeAt(i);
+        const wav = pcmToWav(pcm.buffer, 16000);
+        const blob = new Blob([wav], { type: 'audio/wav' });
+        audio.src = URL.createObjectURL(blob);
+        audio.play();
+        setSpeaking(true);
+        audio.onended = () => setSpeaking(false);
+      } else if (msg.type === 'user_message' && msg.message?.content) {
+        addMsg('user', msg.message.content);
+        speech.textContent = msg.message.content;
+      } else if (msg.type === 'assistant_message' && msg.message?.content) {
+        addMsg('assistant', msg.message.content);
+        speech.textContent = msg.message.content;
+      } else if (msg.type === 'user_interruption') {
+        setSpeaking(false);
+        speech.textContent = '(te escucho...)';
+      }
+    } catch(err) {}
+  };
+  eviWs.onclose = () => {
+    eviWs = null;
+    setEviMode(false);
+    speech.textContent = 'EVI desconectado';
+    setSpeaking(false);
+  };
+  eviWs.onerror = () => {
+    eviWs = null;
+    setEviMode(false);
+    speech.textContent = 'Error de conexión EVI';
+  };
+}
+
+function stopEvi() {
+  if (eviWs) { eviWs.close(); }
+}
+
+eviBtn.addEventListener('click', () => {
+  if (eviWs) { stopEvi(); } else { startEvi(); }
+});
+
+function pcmToWav(pcmData, sampleRate) {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = pcmData.byteLength;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const write = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  write(36, 'data');
+  view.setUint32(40, dataSize, true);
+  new Uint8Array(buffer, 44).set(new Uint8Array(pcmData));
+  return buffer;
+}
+
+// === Browser Mic Capture ===
+let micRecorder = null;
+let micStream = null;
+let micChunks = [];
+let micTimeoutId = null;
+let micResolve = null;
+const micBtn = document.getElementById('micBtn');
+
+function micBtnClickHandler() {
+  if (!micResolve) return;
+  micBtn.style.display = 'none';
+  micBtn.classList.remove('mic-btn-pulse');
+  speech.textContent = '🎤 Grabando...';
+  setListening(true);
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    fetch('/api/stt-from-browser', { method: 'POST', body: '' });
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      micStream = stream;
+      micChunks = [];
+      const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+      let mimeType = '';
+      for (const t of types) {
+        if (MediaRecorder.isTypeSupported(t)) { mimeType = t; break; }
+      }
+      micRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      micRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) micChunks.push(e.data);
+      };
+      micRecorder.onerror = () => console.error('[Voice] MediaRecorder error');
+      micRecorder.onstop = () => {
+        setListening(false);
+        const blob = new Blob(micChunks, { type: mimeType || 'audio/webm' });
+        if (blob.size > 100) {
+          fetch('/api/stt-from-browser', { method: 'POST', body: blob })
+            .then(r => r.json())
+            .then(d => { if (d.text) speech.textContent = d.text; })
+            .catch(() => {});
+        } else {
+          fetch('/api/stt-from-browser', { method: 'POST', body: '' });
+        }
+        micStream.getTracks().forEach(t => t.stop());
+        micRecorder = null;
+        micStream = null;
+      };
+      micRecorder.start(100);
+      clearTimeout(micTimeoutId);
+      micTimeoutId = setTimeout(() => {
+        if (micRecorder && micRecorder.state === 'recording') micRecorder.stop();
+      }, 10000);
+    })
+    .catch(err => {
+      setListening(false);
+      const msg = '[Voice] Mic error: ' + (err.message || 'unknown');
+      console.error(msg);
+      fetch('/api/stt-from-browser', { method: 'POST', body: msg });
+    });
+}
+
+micBtn.addEventListener('click', micBtnClickHandler);
+
+function startMicCapture(timeout) {
+  if (micRecorder) return;
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    fetch('/api/stt-from-browser', { method: 'POST', body: '' });
+    return;
+  }
+  speech.textContent = '🎤 Click para hablar';
+  micBtn.textContent = '🎤 Click para hablar';
+  micBtn.style.display = 'inline-block';
+  micBtn.classList.add('mic-btn-pulse');
+  micResolve = true;
+  clearTimeout(micTimeoutId);
+  micTimeoutId = setTimeout(() => {
+    micBtn.style.display = 'none';
+    micBtn.classList.remove('mic-btn-pulse');
+    if (micResolve) { micResolve = null; fetch('/api/stt-from-browser', { method: 'POST', body: '' }); }
+  }, timeout * 1000);
+}
+
+// === SSE ===
+const es = new EventSource('/events?name=' + encodeURIComponent(myName));
+es.onopen = () => {
+  setConnected(true);
+  fetch('/api/health').then(r => r.json()).then(d => {
+    if (d.eviAvailable !== undefined) { eviAvailable = d.eviAvailable; updateEviButton(); }
+  }).catch(() => {});
+  fetch('/api/clients').then(r => r.json()).then(d => {
+    if (d.clients) { clientList = d.clients; activeTargets = d.activeTargets || []; renderClients(d.clients, activeTargets); }
+  }).catch(() => {});
+};
+es.onmessage = (e) => {
+  try {
+    const d = JSON.parse(e.data);
+    if (d.type === 'connected') {
+      if (d.clients) { clientList = d.clients; activeTargets = d.activeTargets || []; renderClients(d.clients, activeTargets); }
+      if (d.eviAvailable !== undefined) { eviAvailable = d.eviAvailable; updateEviButton(); }
+    } else if (d.type === 'evi_status') {
+      eviAvailable = d.available;
+      updateEviButton();
+    } else if (d.type === 'speak') {
+      setSpeaking(true); speech.textContent = d.text;
+      audio.src = '/api/tts?text=' + encodeURIComponent(d.text);
+      audio.play();
+    } else if (d.type === 'show_text') {
+      setSpeaking(true); speech.textContent = d.text;
+    } else if (d.type === 'listening') {
+      setListening(d.active);
+      if (d.active) speech.textContent = '🎤 Escuchando...';
+    } else if (d.type === 'start_mic') {
+      setListening(true);
+      speech.textContent = '🎤 Escuchando...';
+      startMicCapture(d.timeout || 10);
+    } else if (d.type === 'start_evi') {
+      if (eviAvailable && !eviWs) startEvi();
+    } else if (d.type === 'output_mode') {
+      if (outputModeEl) outputModeEl.textContent = d.mode;
+    } else if (d.type === 'clients') {
+      clientList = d.clients;
+      activeTargets = d.activeTargets || [];
+      renderClients(d.clients, activeTargets);
+    } else if (d.type === 'active_targets') {
+      activeTargets = d.targets || [];
+      renderClients(clientList, activeTargets);
+    }
+  } catch(err) {}
+};
+es.onerror = () => setConnected(false);
+audio.onended = () => setSpeaking(false);
+audio.onerror = () => {
+  console.error('[Voice] TTS playback error');
+  setSpeaking(false);
+  speech.textContent = '(Error reproduciendo audio)';
+};
+setInterval(() => {
+  if (es.readyState === EventSource.CLOSED) setConnected(false);
+}, 2000);
+
+updateEviButton();
+</script>
+</body>
+</html>
