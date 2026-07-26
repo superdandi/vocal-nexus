@@ -94,7 +94,11 @@ app.post('/api/active-target', (req, res) => {
 app.post('/api/notify', (req, res) => {
   const { text, type } = req.body;
   console.log(`[NOTIFY] ${type}: "${text}"`);
-  broadcast({ type: 'notification', text, eventType: type });
+  if (type === 'speak') {
+    broadcast({ type: 'speak', text });
+  } else {
+    broadcast({ type: 'notification', text, eventType: type });
+  }
   res.json({ status: 'sent' });
 });
 
