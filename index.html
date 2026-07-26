@@ -57,7 +57,7 @@ body::after {
 .client-badge.voice-on { border-color: #0ff; color: #0ff; box-shadow: 0 0 8px rgba(0,255,255,0.3); background: rgba(0,255,255,0.05); }
 .client-badge.voice-on::before { content: '◆ '; }
 .client-badge.voice-off::before { content: '◇ '; }
-.client-badge.self { border-style: dashed; opacity: 0.6; pointer-events: none; }
+.client-badge.self { border-style: dashed; opacity: 0.6; }
 .client-badge.self.voice-on { opacity: 1; }
 .client-badge.self.voice-off { opacity: 0.8; }
 .speech-container { min-height: 60px; display: flex; align-items: center; justify-content: center; margin: 0.5rem 0; }
@@ -157,7 +157,9 @@ function saveName(name) {
   myName = name.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
   localStorage.setItem('nexus_name', myName);
   hideModal();
+  unlockSpeech();
   connectSSE();
+  setTimeout(() => playBeep(), 500);
 }
 
 if (!myName) {
@@ -175,18 +177,30 @@ nameInput.addEventListener('keydown', (e) => {
   }
 });
 
+let audioCtx = null;
+
 function unlockSpeech() {
   if (speechUnlocked) return;
   speechUnlocked = true;
   try {
-    const u = new SpeechSynthesisUtterance('');
-    u.volume = 0;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => console.log('AudioContext resumed')).catch(() => {});
+    }
+  } catch (e) { console.log('AudioContext error:', e); }
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance('.');
+    u.volume = 0.01;
+    u.lang = 'es-MX';
     window.speechSynthesis.speak(u);
-  } catch {}
+    console.log('speechSynthesis unlock attempted');
+  } catch (e) { console.log('speechSynthesis unlock error:', e); }
 }
 
 document.addEventListener('click', unlockSpeech, { once: true });
 document.addEventListener('touchstart', unlockSpeech, { once: true });
+document.addEventListener('keydown', unlockSpeech, { once: true });
 
 function renderClients(clients, targets) {
   clientBar.innerHTML = '';
@@ -284,22 +298,57 @@ function speakText(text) {
   if (!text) return;
   speech.textContent = text;
   setSpeaking(true);
-  if (!speechUnlocked) {
-    unlockSpeech();
-  }
+
+  if (!speechUnlocked) unlockSpeech();
+
+  playBeep();
+
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'es-MX';
-    utter.rate = 1.0;
-    utter.pitch = 1.0;
-    utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utter);
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'es-MX';
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+      utter.onend = () => setSpeaking(false);
+      utter.onerror = () => { console.log('speechSynthesis error'); setSpeaking(false); };
+      window.speechSynthesis.speak(utter);
+    } catch (e) { console.log('speakText error:', e); }
   } else {
-    audio.src = '/api/tts?text=' + encodeURIComponent(text);
-    audio.play();
+    setTimeout(() => setSpeaking(false), 1500);
   }
+}
+
+function playBeep() {
+  try {
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.3);
+    } else {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch (e) { console.log('playBeep error:', e); }
 }
 
 function addNotif(text, voice) {
@@ -336,7 +385,6 @@ function connectSSE() {
         addNotif(d.text, amIVoiceTarget);
       } else if (d.type === 'speak') {
         speakText(d.text);
-        addNotif(d.text, true);
       } else if (d.type === 'show_text') {
         speech.textContent = d.text;
       } else if (d.type === 'listening') {

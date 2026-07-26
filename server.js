@@ -80,9 +80,10 @@ function broadcastClientList() {
   });
 }
 
-function broadcast(event, voiceOnly = false) {
+function broadcast(event, voiceOnly = false, targetName = null) {
   const data = `data: ${JSON.stringify(event)}\n\n`;
   sseClients.forEach((res, name) => {
+    if (targetName && name !== targetName) return;
     if (voiceOnly && !voiceTargets.has(name)) return;
     try { res.write(data); } catch {}
   });
@@ -119,28 +120,28 @@ app.post('/api/voice-target', (req, res) => {
 });
 
 app.post('/api/notify', (req, res) => {
-  const { text, eventType } = req.body;
-  console.log(`[NOTIFY] ${eventType}: "${text}"`);
+  const { text, eventType, target } = req.body;
+  console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` → ${target}` : ''}`);
 
   broadcast({
     type: 'notification',
     text,
     eventType,
     timestamp: Date.now()
-  });
+  }, false, target || null);
 
   broadcast({
     type: 'speak',
     text,
     lang: 'es-MX'
-  }, true);
+  }, true, target || null);
 
   res.json({ status: 'sent' });
 });
 
 app.post('/api/tts', (req, res) => {
-  const { text } = req.body;
-  broadcast({ type: 'speak', text, lang: 'es-MX' }, true);
+  const { text, target } = req.body;
+  broadcast({ type: 'speak', text, lang: 'es-MX' }, true, target || null);
   res.json({ status: 'speaking' });
 });
 
