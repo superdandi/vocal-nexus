@@ -116,11 +116,11 @@ body::after {
 <audio id="audio" autoplay style="display:none"></audio>
 <div class="modal-overlay" id="nameModal" style="display:none">
   <div class="modal-box">
-    <h2>VOICE NEXUS</h2>
-    <p>Asigna un nombre a este terminal para que los demás puedan identificarlo en la red.</p>
+    <h2 id="modalTitle">VOICE NEXUS</h2>
+    <p id="modalDesc">Asigna un nombre a este terminal para que los demás puedan identificarlo en la red.</p>
     <input type="text" id="nameInput" placeholder="nombre-del-equipo" maxlength="30" autocomplete="off" spellcheck="false">
     <button class="modal-btn" id="nameBtn">CONECTAR</button>
-    <div class="modal-hint">Enter para conectar &middot; Doble click en tu badge para renombrar</div>
+    <div class="modal-hint" id="modalHint">Enter para conectar &middot; Doble click en tu badge para renombrar</div>
   </div>
 </div>
 <script>
@@ -135,6 +135,9 @@ const nameModal = document.getElementById('nameModal');
 const nameInput = document.getElementById('nameInput');
 const nameBtn = document.getElementById('nameBtn');
 const clientBar = document.getElementById('clientBar');
+const modalTitle = document.getElementById('modalTitle');
+const modalDesc = document.getElementById('modalDesc');
+const modalHint = document.getElementById('modalHint');
 
 let myName = localStorage.getItem('nexus_name');
 let clientList = [];
@@ -142,22 +145,51 @@ let voiceTargets = [];
 let speechUnlocked = false;
 let speaking = false;
 let listening = false;
+let renameOldName = null;
+
+function showRenameModal(oldName) {
+  renameOldName = oldName;
+  modalTitle.textContent = 'RENOMBRAR TERMINAL';
+  modalDesc.textContent = 'Ingresa el nuevo nombre para este terminal.';
+  nameInput.value = oldName;
+  nameBtn.textContent = 'RENOMBRAR';
+  modalHint.textContent = 'Enter para confirmar';
+  nameModal.style.display = 'flex';
+  setTimeout(() => nameInput.focus(), 100);
+}
 
 function showModal() {
-  nameModal.style.display = 'flex';
+  renameOldName = null;
+  modalTitle.textContent = 'VOICE NEXUS';
+  modalDesc.textContent = 'Asigna un nombre a este terminal para que los demás puedan identificarlo en la red.';
   nameInput.value = myName || '';
+  nameBtn.textContent = 'CONECTAR';
+  modalHint.textContent = 'Enter para conectar';
+  nameModal.style.display = 'flex';
   setTimeout(() => nameInput.focus(), 100);
 }
 
 function hideModal() {
   nameModal.style.display = 'none';
+  renameOldName = null;
 }
 
 function saveName(name) {
-  myName = name.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
+  const newName = name.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
+  if (!newName) return;
+  const oldName = renameOldName;
+  myName = newName;
   localStorage.setItem('nexus_name', myName);
   hideModal();
   unlockSpeech();
+  if (oldName && oldName !== myName) {
+    fetch('/api/voice-target', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: oldName, enabled: false })
+    });
+    if (es) es.close();
+  }
   connectSSE();
   setTimeout(() => playBeep(), 500);
 }
@@ -227,19 +259,7 @@ function renderClients(clients, targets) {
     } else {
       badge.title = 'Doble click para renombrar este terminal';
       badge.addEventListener('dblclick', () => {
-        const newName = prompt('Nuevo nombre para este terminal:', myName);
-        if (newName && newName.trim() && newName.trim() !== myName) {
-          const oldName = myName;
-          myName = newName.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-');
-          localStorage.setItem('nexus_name', myName);
-          fetch('/api/voice-target', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: oldName, enabled: false })
-          });
-          es.close();
-          connectSSE();
-        }
+        showRenameModal(myName);
       });
     }
     clientBar.appendChild(badge);
