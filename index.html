@@ -202,6 +202,25 @@ function setSpeaking(active) {
   bars.forEach(b => { b.classList.toggle('active', active); if (active) b.classList.remove('listening'); });
   holoIcon.textContent = active ? '◉' : listening ? '◎' : '◈';
 }
+
+function speakText(text) {
+  if (!text) return;
+  speech.textContent = text;
+  setSpeaking(true);
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'es-ES';
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utter);
+  } else {
+    audio.src = '/api/tts?text=' + encodeURIComponent(text);
+    audio.play();
+  }
+}
 function setListening(active) {
   listening = active;
   if (active) speaking = false;
@@ -434,12 +453,10 @@ es.onmessage = (e) => {
     } else if (d.type === 'evi_status') {
       eviAvailable = d.available;
       updateEviButton();
-    } else if (d.type === 'speak') {
-      setSpeaking(true); speech.textContent = d.text;
-      audio.src = '/api/tts?text=' + encodeURIComponent(d.text);
-      audio.play();
+    } else if (d.type === 'speak' || d.type === 'notification') {
+      speakText(d.text);
     } else if (d.type === 'show_text') {
-      setSpeaking(true); speech.textContent = d.text;
+      speech.textContent = d.text;
     } else if (d.type === 'listening') {
       setListening(d.active);
       if (d.active) speech.textContent = '🎤 Escuchando...';

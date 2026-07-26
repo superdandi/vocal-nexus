@@ -7,17 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3777;
 
-// Static files
 app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '50mb' }));
 
-// State
 let clients = new Map();
 let activeTargets = [];
 let outputMode = 'dual';
 let eviAvailable = false;
-
-// SSE connections
 const sseClients = new Map();
 
 app.get('/events', (req, res) => {
@@ -32,7 +28,6 @@ app.get('/events', (req, res) => {
   clients.set(name, { name, connected: true, lastSeen: Date.now() });
   sseClients.set(name, res);
 
-  // Send initial state
   res.write(`data: ${JSON.stringify({
     type: 'connected',
     clients: Array.from(clients.keys()),
@@ -40,7 +35,6 @@ app.get('/events', (req, res) => {
     eviAvailable
   })}\n\n`);
 
-  // Broadcast updated client list
   broadcastClients();
 
   req.on('close', () => {
@@ -68,7 +62,6 @@ function broadcastClients() {
   });
 }
 
-// API endpoints
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', eviAvailable, clients: clients.size });
 });
@@ -98,18 +91,29 @@ app.post('/api/active-target', (req, res) => {
   res.json({ targets: activeTargets });
 });
 
-// TTS endpoint (placeholder - returns empty audio)
+app.post('/api/notify', (req, res) => {
+  const { text, type } = req.body;
+  console.log(`[NOTIFY] ${type}: "${text}"`);
+  broadcast({ type: 'notification', text, eventType: type });
+  res.json({ status: 'sent' });
+});
+
+app.post('/api/tts', (req, res) => {
+  const { text } = req.body;
+  console.log(`[TTS] Request: "${text}"`);
+  broadcast({ type: 'speak', text });
+  res.json({ status: 'speaking' });
+});
+
 app.get('/api/tts', (req, res) => {
   const text = req.query.text || '';
   console.log(`[TTS] Request: "${text}"`);
-  // Return silence WAV (16kHz, 16-bit, mono)
   const sampleRate = 16000;
   const duration = Math.min(text.length * 0.05, 10);
   const numSamples = Math.floor(sampleRate * duration);
   const dataSize = numSamples * 2;
   const buffer = Buffer.alloc(44 + dataSize);
 
-  // WAV header
   buffer.write('RIFF', 0);
   buffer.writeUInt32LE(36 + dataSize, 4);
   buffer.write('WAVE', 8);
@@ -128,13 +132,11 @@ app.get('/api/tts', (req, res) => {
   res.send(buffer);
 });
 
-// STT from browser (placeholder)
 app.post('/api/stt-from-browser', (req, res) => {
   console.log('[STT] Received browser audio');
   res.json({ text: '', status: 'received' });
 });
 
-// WebSocket server
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
@@ -164,7 +166,6 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-// EVI WebSocket (separate path)
 const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
 
 eviWss.on('connection', (ws) => {
@@ -176,7 +177,6 @@ eviWss.on('connection', (ws) => {
   });
 });
 
-// Cleanup stale clients every 30s
 setInterval(() => {
   const now = Date.now();
   clients.forEach((client, name) => {
@@ -189,7 +189,7 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  ╔══════════════════════════════════════╗`);
-  console.log(`  ║   OPencode Voice Nexus               ║`);
+  console.log(`  ║   OpenCode Voice Nexus               ║`);
   console.log(`  ║   Server running on port ${PORT}        ║`);
   console.log(`  ║   http://localhost:${PORT}              ║`);
   console.log(`  ╚══════════════════════════════════════╝\n`);
