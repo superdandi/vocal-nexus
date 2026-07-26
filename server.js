@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -147,28 +148,16 @@ app.post('/api/tts', (req, res) => {
 
 app.get('/api/tts', (req, res) => {
   const text = req.query.text || '';
-  const sampleRate = 16000;
-  const duration = Math.min(text.length * 0.05, 10);
-  const numSamples = Math.floor(sampleRate * duration);
-  const dataSize = numSamples * 2;
-  const buffer = Buffer.alloc(44 + dataSize);
+  if (!text) return res.status(400).json({ error: 'text required' });
 
-  buffer.write('RIFF', 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8);
-  buffer.write('fmt ', 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(1, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write('data', 36);
-  buffer.writeUInt32LE(dataSize, 40);
-
-  res.set('Content-Type', 'audio/wav');
-  res.send(buffer);
+  const proc = execFile('espeak-ng', ['-v', 'es-mx', '--stdout', text], { encoding: 'buffer', maxBuffer: 1024 * 1024 }, (err, stdout) => {
+    if (err) {
+      console.log('[TTS] espeak-ng error:', err.message);
+      return res.status(500).json({ error: 'tts failed' });
+    }
+    res.set('Content-Type', 'audio/wav');
+    res.send(stdout);
+  });
 });
 
 const wss = new WebSocketServer({ server, path: '/ws' });
