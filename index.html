@@ -193,6 +193,7 @@ function saveName(name) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: myName, enabled: true })
     });
+    fetch('/api/client/' + encodeURIComponent(oldName), { method: 'DELETE' });
     if (es) es.close();
   }
   connectSSE();

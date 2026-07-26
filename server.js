@@ -101,6 +101,16 @@ app.get('/api/clients', (req, res) => {
   });
 });
 
+app.delete('/api/client/:name', (req, res) => {
+  const { name } = req.params;
+  clients.delete(name);
+  sseClients.delete(name);
+  voiceTargets.delete(name);
+  saveState();
+  broadcastClientList();
+  res.json({ removed: name });
+});
+
 app.post('/api/voice-target', (req, res) => {
   const { name, enabled } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
