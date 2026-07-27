@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const { execFile } = require('child_process');
+const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -282,25 +282,34 @@ app.get('/api/tts', (req, res) => {
     return res.send(cached);
   }
 
-  execFile('espeak-ng', ['-v', 'es-mx', '--stdout', text], { encoding: 'buffer', maxBuffer: 1024 * 1024 }, (err, stdout) => {
-    if (!err && stdout && stdout.length > 100) {
-      console.log(`[TTS] espeak-ng OK (${stdout.length} bytes)`);
-      cacheTTS(text, stdout);
-      res.set('Content-Type', 'audio/wav');
-      return res.send(stdout);
+  const tmpFile = '/tmp/tts_' + Date.now() + '.wav';
+  const safeText = text.replace(/'/g, "'\\''");
+  exec(`espeak-ng -v es-mx -w '${tmpFile}' '${safeText}'`, { timeout: 5000 }, (err) => {
+    if (!err && fs.existsSync(tmpFile)) {
+      const data = fs.readFileSync(tmpFile);
+      fs.unlinkSync(tmpFile);
+      if (data.length > 100) {
+        console.log(`[TTS] espeak-ng OK (${data.length} bytes)`);
+        cacheTTS(text, data);
+        res.set('Content-Type', 'audio/wav');
+        return res.send(data);
+      }
     }
     console.log('[TTS] espeak-ng failed, trying Kokoro');
     const kokoroPath = path.join(__dirname, 'venv', 'bin', 'python');
     const kokoroScript = path.join(__dirname, 'tts_kokoro.py');
-    execFile(kokoroPath, [kokoroScript, text], { encoding: 'buffer', maxBuffer: 1024 * 1024, timeout: 30000 }, (err2, stdout2) => {
-      if (err2 || !stdout2 || stdout2.length <= 100) {
+    exec(`'${kokoroPath}' '${kokoroScript}' '${safeText}' > '${tmpFile}'`, { timeout: 30000 }, (err2) => {
+      if (err2 || !fs.existsSync(tmpFile)) {
         console.log('[TTS] All TTS failed');
+        if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
         return res.status(500).json({ error: 'tts failed' });
       }
-      console.log(`[TTS] Kokoro OK (${stdout2.length} bytes)`);
-      cacheTTS(text, stdout2);
+      const data = fs.readFileSync(tmpFile);
+      fs.unlinkSync(tmpFile);
+      console.log(`[TTS] Kokoro OK (${data.length} bytes)`);
+      cacheTTS(text, data);
       res.set('Content-Type', 'audio/wav');
-      res.send(stdout2);
+      res.send(data);
     });
   });
 });
