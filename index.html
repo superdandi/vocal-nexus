@@ -442,7 +442,8 @@ let ws = null;
 let wsReconnectDelay = 1000;
 
 function connectWS() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  if (ws) { try { ws.close(); } catch {} ws = null; }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName));
 
@@ -483,6 +484,7 @@ function connectWS() {
 
   ws.onclose = () => {
     setConnected(false);
+    ws = null;
     setTimeout(connectWS, wsReconnectDelay);
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
   };
