@@ -250,9 +250,37 @@ app.post('/api/tts', (req, res) => {
   res.json({ status: 'speaking' });
 });
 
+const crypto = require('crypto');
+const CACHE_DIR = path.join(__dirname, 'cache');
+
+function getCachedTTS(text) {
+  const hash = crypto.createHash('md5').update(text).digest('hex');
+  const cachePath = path.join(CACHE_DIR, hash + '.wav');
+  try {
+    if (fs.existsSync(cachePath)) {
+      return fs.readFileSync(cachePath);
+    }
+  } catch {}
+  return null;
+}
+
+function cacheTTS(text, wavData) {
+  try {
+    const hash = crypto.createHash('md5').update(text).digest('hex');
+    fs.writeFileSync(path.join(CACHE_DIR, hash + '.wav'), wavData);
+  } catch {}
+}
+
 app.get('/api/tts', (req, res) => {
   const text = req.query.text || '';
   if (!text) return res.status(400).json({ error: 'text required' });
+
+  const cached = getCachedTTS(text);
+  if (cached) {
+    console.log(`[TTS] Cache hit: "${text}" (${cached.length} bytes)`);
+    res.set('Content-Type', 'audio/wav');
+    return res.send(cached);
+  }
 
   const kokoroPath = path.join(__dirname, 'venv', 'bin', 'python');
   const kokoroScript = path.join(__dirname, 'tts_kokoro.py');
@@ -260,6 +288,7 @@ app.get('/api/tts', (req, res) => {
   execFile(kokoroPath, [kokoroScript, text], { encoding: 'buffer', maxBuffer: 1024 * 1024, timeout: 30000 }, (err, stdout) => {
     if (!err && stdout && stdout.length > 100) {
       console.log(`[TTS] Kokoro OK (${stdout.length} bytes)`);
+      cacheTTS(text, stdout);
       res.set('Content-Type', 'audio/wav');
       return res.send(stdout);
     }
@@ -270,6 +299,7 @@ app.get('/api/tts', (req, res) => {
         return res.status(500).json({ error: 'tts failed' });
       }
       console.log(`[TTS] espeak-ng OK (${stdout2.length} bytes)`);
+      cacheTTS(text, stdout2);
       res.set('Content-Type', 'audio/wav');
       res.send(stdout2);
     });
