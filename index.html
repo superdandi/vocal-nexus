@@ -359,7 +359,7 @@ function trySpeechFirst(text, onDone) {
   const finish = () => { if (!done) { done = true; onDone(); } };
   const fallback = () => { if (!done) { done = true; console.log('speechSynthesis failed, fallback to espeak-ng'); serverTTS(text, onDone); } };
 
-  const timeout = setTimeout(fallback, 2000);
+  const timeout = setTimeout(fallback, 3000);
   try {
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
@@ -466,7 +466,7 @@ function pollLoop() {
         voiceTargets = data.voiceTargets || [];
         renderClients(clientList, voiceTargets);
       }
-      if (data.events && data.events.length > 0) {
+      if (data.events && data.events.length > 0) { data.events = data.events.slice(-5);
         data.events.forEach(d => {
           if (d.type === 'notification') {
             const amIVoiceTarget = voiceTargets.includes(myName);
