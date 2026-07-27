@@ -472,6 +472,23 @@ if (myName) {
 audio.onended = () => setSpeaking(false);
 audio.onerror = () => { setSpeaking(false); speech.textContent = '(Error audio)'; };
 
+const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+keepAliveAudio.loop = true;
+keepAliveAudio.volume = 0.001;
+
+document.addEventListener('click', () => {
+  keepAliveAudio.play().catch(() => {});
+}, { once: true });
+
+setInterval(() => {
+  if (!myName) return;
+  if (es && es.readyState === EventSource.CLOSED) {
+    console.log('SSE dead, reconnecting...');
+    reconnectDelay = 1000;
+    connectSSE();
+  }
+}, 5000);
+
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;
   const bitsPerSample = 16;
