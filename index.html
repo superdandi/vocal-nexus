@@ -339,13 +339,22 @@ function tryTTS(text) {
 
 function serverTTS(text) {
   console.log('Using server TTS');
-  const a = new Audio('/api/tts?text=' + encodeURIComponent(text));
-  a.volume = 1.0;
-  let done = false;
-  const finish = () => { if (!done) { done = true; setSpeaking(false); } };
-  a.onended = finish;
-  a.onerror = () => { console.log('Server TTS error'); finish(); };
-  a.play().catch(() => { console.log('Server TTS play blocked'); finish(); });
+  const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  if (!audioCtx) audioCtx = ctx;
+
+  fetch('/api/tts?text=' + encodeURIComponent(text))
+    .then(r => r.arrayBuffer())
+    .then(buf => ctx.decodeAudioData(buf))
+    .then(audioBuf => {
+      const src = ctx.createBufferSource();
+      src.buffer = audioBuf;
+      src.connect(ctx.destination);
+      src.onended = () => setSpeaking(false);
+      src.start(0);
+      console.log('Playing audio via AudioContext');
+    })
+    .catch(e => { console.log('TTS error:', e.message); setSpeaking(false); });
 }
 
 function hasGoodVoices() {
