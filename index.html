@@ -334,18 +334,36 @@ function speakText(text) {
 
 function tryTTS(text) {
   if (hasGoodVoices()) {
-    console.log('Using speechSynthesis (native voices)');
-    trySpeech(text);
-  } else {
-    console.log('Using server TTS (Kokoro/espeak-ng)');
-    const a = new Audio('/api/tts?text=' + encodeURIComponent(text));
-    a.volume = 1.0;
+    console.log('Trying speechSynthesis first');
     let done = false;
-    const finish = () => { if (!done) { done = true; setSpeaking(false); } };
-    a.onended = finish;
-    a.onerror = () => { console.log('TTS load error'); finish(); trySpeech(text); };
-    a.play().catch(() => { console.log('TTS play blocked'); finish(); trySpeech(text); });
+    const timeout = setTimeout(() => {
+      if (!done) { done = true; console.log('speechSynthesis timeout, fallback to server'); serverTTS(text); }
+    }, 3000);
+    const finish = () => { if (!done) { done = true; clearTimeout(timeout); setSpeaking(false); } };
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'es-MX';
+      utter.volume = 1.0;
+      utter.onend = finish;
+      utter.onerror = () => { console.log('speechSynthesis error, fallback to server'); if (!done) { done = true; clearTimeout(timeout); serverTTS(text); } };
+      window.speechSynthesis.speak(utter);
+    } catch (e) { if (!done) { done = true; clearTimeout(timeout); serverTTS(text); } }
+  } else {
+    serverTTS(text);
   }
+}
+
+function serverTTS(text) {
+  console.log('Using server TTS');
+  const a = new Audio('/api/tts?text=' + encodeURIComponent(text));
+  a.volume = 1.0;
+  let done = false;
+  const finish = () => { if (!done) { done = true; setSpeaking(false); } };
+  a.onended = finish;
+  a.onerror = () => { console.log('Server TTS error'); finish(); };
+  a.play().catch(() => { console.log('Server TTS play blocked'); finish(); });
 }
 
 function hasGoodVoices() {
@@ -355,23 +373,6 @@ function hasGoodVoices() {
   const hasNative = voices.some(v => v.localService === true && !v.name.includes('Google'));
   const hasEs = voices.some(v => v.lang.startsWith('es'));
   return hasNative && hasEs;
-}
-
-function trySpeech(text) {
-  if ('speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'es-MX';
-      utter.volume = 1.0;
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(utter);
-    } catch (e) { setSpeaking(false); }
-  } else {
-    setSpeaking(false);
-  }
 }
 
 function playBeep() {
