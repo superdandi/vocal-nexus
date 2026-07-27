@@ -483,12 +483,13 @@ document.addEventListener('click', () => {
 
 setInterval(() => {
   if (!myName) return;
+  fetch('/api/health').catch(() => {});
   if (es && es.readyState === EventSource.CLOSED) {
     console.log('SSE dead, reconnecting...');
     reconnectDelay = 1000;
     connectSSE();
   }
-}, 5000);
+}, 10000);
 
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;
