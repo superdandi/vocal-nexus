@@ -282,23 +282,22 @@ app.get('/api/tts', (req, res) => {
     return res.send(cached);
   }
 
-  const kokoroPath = path.join(__dirname, 'venv', 'bin', 'python');
-  const kokoroScript = path.join(__dirname, 'tts_kokoro.py');
-
-  execFile(kokoroPath, [kokoroScript, text], { encoding: 'buffer', maxBuffer: 1024 * 1024, timeout: 30000 }, (err, stdout) => {
+  execFile('espeak-ng', ['-v', 'es-mx', '--stdout', text], { encoding: 'buffer', maxBuffer: 1024 * 1024 }, (err, stdout) => {
     if (!err && stdout && stdout.length > 100) {
-      console.log(`[TTS] Kokoro OK (${stdout.length} bytes)`);
+      console.log(`[TTS] espeak-ng OK (${stdout.length} bytes)`);
       cacheTTS(text, stdout);
       res.set('Content-Type', 'audio/wav');
       return res.send(stdout);
     }
-    console.log('[TTS] Kokoro failed, falling back to espeak-ng');
-    execFile('espeak-ng', ['-v', 'es-mx', '--stdout', text], { encoding: 'buffer', maxBuffer: 1024 * 1024 }, (err2, stdout2) => {
-      if (err2) {
-        console.log('[TTS] espeak-ng error:', err2.message);
+    console.log('[TTS] espeak-ng failed, trying Kokoro');
+    const kokoroPath = path.join(__dirname, 'venv', 'bin', 'python');
+    const kokoroScript = path.join(__dirname, 'tts_kokoro.py');
+    execFile(kokoroPath, [kokoroScript, text], { encoding: 'buffer', maxBuffer: 1024 * 1024, timeout: 30000 }, (err2, stdout2) => {
+      if (err2 || !stdout2 || stdout2.length <= 100) {
+        console.log('[TTS] All TTS failed');
         return res.status(500).json({ error: 'tts failed' });
       }
-      console.log(`[TTS] espeak-ng OK (${stdout2.length} bytes)`);
+      console.log(`[TTS] Kokoro OK (${stdout2.length} bytes)`);
       cacheTTS(text, stdout2);
       res.set('Content-Type', 'audio/wav');
       res.send(stdout2);
