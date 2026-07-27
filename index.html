@@ -325,14 +325,10 @@ let ttsPlaying = false;
 
 function speakText(text) {
   if (!text) return;
-  console.log('speakText called:', text);
   speech.textContent = text;
   setSpeaking(true);
-
   if (!speechUnlocked) unlockSpeech();
-
   playBeep();
-
   ttsQueue.push(text);
   processTTSQueue();
 }
@@ -341,7 +337,7 @@ function processTTSQueue() {
   if (ttsPlaying || ttsQueue.length === 0) return;
   ttsPlaying = true;
   const text = ttsQueue.shift();
-  serverTTS(text, () => {
+  trySpeechFirst(text, () => {
     ttsPlaying = false;
     if (ttsQueue.length > 0) {
       setTimeout(processTTSQueue, 200);
@@ -351,33 +347,50 @@ function processTTSQueue() {
   });
 }
 
+function trySpeechFirst(text, onDone) {
+  if (!('speechSynthesis' in window) || window.speechSynthesis.getVoices().length === 0) {
+    console.log('speechSynthesis not available, using server TTS');
+    serverTTS(text, onDone);
+    return;
+  }
+
+  console.log('Trying speechSynthesis for:', text);
+  let done = false;
+  const finish = () => { if (!done) { done = true; onDone(); } };
+  const fallback = () => { if (!done) { done = true; console.log('speechSynthesis failed, fallback to espeak-ng'); serverTTS(text, onDone); } };
+
+  const timeout = setTimeout(fallback, 2000);
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'es-MX';
+    utter.volume = 1.0;
+    utter.onend = () => { clearTimeout(timeout); finish(); };
+    utter.onerror = () => { clearTimeout(timeout); fallback(); };
+    window.speechSynthesis.speak(utter);
+  } catch (e) { clearTimeout(timeout); fallback(); }
+}
+
 function serverTTS(text, onDone) {
-  console.log('serverTTS called:', text);
-  const url = '/api/tts?text=' + encodeURIComponent(text);
-  console.log('Fetching:', url);
-  fetch(url)
-    .then(r => {
-      console.log('Fetch response:', r.status, 'ok:', r.ok);
-      return r.arrayBuffer();
-    })
+  console.log('Using server TTS (espeak-ng)');
+  fetch('/api/tts?text=' + encodeURIComponent(text))
+    .then(r => r.arrayBuffer())
     .then(buf => {
-      console.log('Audio buffer size:', buf.byteLength);
       const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (ctx.state === 'suspended') ctx.resume();
       if (!audioCtx) audioCtx = ctx;
       return ctx.decodeAudioData(buf);
     })
     .then(audioBuf => {
-      console.log('Audio decoded, duration:', audioBuf.duration);
-      const ctx = audioCtx;
-      const src = ctx.createBufferSource();
+      const src = audioCtx.createBufferSource();
       src.buffer = audioBuf;
-      src.connect(ctx.destination);
-      src.onended = () => { console.log('Audio playback ended'); if (onDone) onDone(); };
+      src.connect(audioCtx.destination);
+      src.onended = () => { if (onDone) onDone(); };
       src.start(0);
-      console.log('Playing audio via AudioContext');
+      console.log('Playing server audio');
     })
-    .catch(e => { console.log('TTS error:', e.message, e); if (onDone) onDone(); });
+    .catch(e => { console.log('Server TTS error:', e.message); if (onDone) onDone(); });
 }
 
 function hasGoodVoices() {
