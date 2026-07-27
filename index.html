@@ -320,6 +320,9 @@ function setConnected(connected) {
   if (!connected) { setSpeaking(false); setListening(false); }
 }
 
+let ttsQueue = [];
+let ttsPlaying = false;
+
 function speakText(text) {
   if (!text) return;
   console.log('speakText called:', text);
@@ -330,31 +333,51 @@ function speakText(text) {
 
   playBeep();
 
-  tryTTS(text);
+  ttsQueue.push(text);
+  processTTSQueue();
 }
 
-function tryTTS(text) {
-  serverTTS(text);
+function processTTSQueue() {
+  if (ttsPlaying || ttsQueue.length === 0) return;
+  ttsPlaying = true;
+  const text = ttsQueue.shift();
+  serverTTS(text, () => {
+    ttsPlaying = false;
+    if (ttsQueue.length > 0) {
+      setTimeout(processTTSQueue, 200);
+    } else {
+      setSpeaking(false);
+    }
+  });
 }
 
-function serverTTS(text) {
-  console.log('Using server TTS');
-  const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === 'suspended') ctx.resume();
-  if (!audioCtx) audioCtx = ctx;
-
-  fetch('/api/tts?text=' + encodeURIComponent(text))
-    .then(r => r.arrayBuffer())
-    .then(buf => ctx.decodeAudioData(buf))
+function serverTTS(text, onDone) {
+  console.log('serverTTS called:', text);
+  const url = '/api/tts?text=' + encodeURIComponent(text);
+  console.log('Fetching:', url);
+  fetch(url)
+    .then(r => {
+      console.log('Fetch response:', r.status, 'ok:', r.ok);
+      return r.arrayBuffer();
+    })
+    .then(buf => {
+      console.log('Audio buffer size:', buf.byteLength);
+      const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (!audioCtx) audioCtx = ctx;
+      return ctx.decodeAudioData(buf);
+    })
     .then(audioBuf => {
+      console.log('Audio decoded, duration:', audioBuf.duration);
+      const ctx = audioCtx;
       const src = ctx.createBufferSource();
       src.buffer = audioBuf;
       src.connect(ctx.destination);
-      src.onended = () => setSpeaking(false);
+      src.onended = () => { console.log('Audio playback ended'); if (onDone) onDone(); };
       src.start(0);
       console.log('Playing audio via AudioContext');
     })
-    .catch(e => { console.log('TTS error:', e.message); setSpeaking(false); });
+    .catch(e => { console.log('TTS error:', e.message, e); if (onDone) onDone(); });
 }
 
 function hasGoodVoices() {
