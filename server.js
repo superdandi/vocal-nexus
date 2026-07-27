@@ -58,7 +58,7 @@ app.get('/events', (req, res) => {
 
   const heartbeat = setInterval(() => {
     try { res.write(': heartbeat\n\n'); } catch {}
-  }, 30000);
+  }, 6000);
 
   req.on('close', () => {
     clearInterval(heartbeat);
