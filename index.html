@@ -440,6 +440,7 @@ function addNotif(text, voice) {
 
 let ws = null;
 let wsReconnectDelay = 1000;
+let reconnectTimer = null;
 
 function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -494,13 +495,16 @@ function connectWS() {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && myName) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) connectWS();
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connectWS, 500);
+    }
   }
 });
 
-if (myName) {
-  connectWS();
-}
+window.addEventListener('load', () => {
+  if (myName) setTimeout(connectWS, 1000);
+});
 
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;
