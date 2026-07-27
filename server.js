@@ -31,6 +31,75 @@ let voiceTargets = new Set(state.voiceTargets);
 let clients = new Map();
 const sseClients = new Map();
 
+const notificationQueues = new Map();
+const pollWaiters = new Map();
+const POLL_TIMEOUT = 30000;
+
+function queueNotification(name, event) {
+  if (!notificationQueues.has(name)) {
+    notificationQueues.set(name, []);
+  }
+  const queue = notificationQueues.get(name);
+  queue.push(event);
+  if (queue.length > 100) queue.shift();
+}
+
+function getQueuedNotifications(name, since) {
+  const queue = notificationQueues.get(name) || [];
+  return queue.filter(e => e.timestamp > since);
+}
+
+function wakePoller(name) {
+  const waiter = pollWaiters.get(name);
+  if (waiter) {
+    clearTimeout(waiter.timer);
+    pollWaiters.delete(name);
+    const queue = getQueuedNotifications(name, waiter.since);
+    try {
+      waiter.res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
+    } catch {}
+  }
+}
+
+app.get('/api/poll', (req, res) => {
+  const name = req.query.name || 'anonymous';
+  const since = parseInt(req.query.since) || 0;
+
+  clients.set(name, {
+    name,
+    connected: true,
+    voiceEnabled: voiceTargets.has(name),
+    lastSeen: Date.now()
+  });
+
+  const queue = getQueuedNotifications(name, since);
+  if (queue.length > 0) {
+    clients.get(name).lastSeen = Date.now();
+    return res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
+  }
+
+  const existing = pollWaiters.get(name);
+  if (existing) {
+    clearTimeout(existing.timer);
+    pollWaiters.delete(name);
+  }
+
+  const timer = setTimeout(() => {
+    pollWaiters.delete(name);
+    if (clients.has(name)) clients.get(name).lastSeen = Date.now();
+    try {
+      res.json({ events: [], clients: getClientList(), voiceTargets: [...voiceTargets] });
+    } catch {}
+  }, POLL_TIMEOUT);
+
+  pollWaiters.set(name, { res, since, timer });
+
+  req.on('close', () => {
+    clearTimeout(timer);
+    pollWaiters.delete(name);
+  });
+});
+
 app.get('/events', (req, res) => {
   const name = req.query.name || 'anonymous';
   res.writeHead(200, {
@@ -79,10 +148,18 @@ function getClientList() {
 }
 
 function broadcastClientList() {
-  broadcast({
+  const event = {
     type: 'clients',
     clients: getClientList(),
     voiceTargets: [...voiceTargets]
+  };
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  sseClients.forEach((res, name) => {
+    try { res.write(data); } catch {}
+  });
+  clients.forEach((c, name) => {
+    queueNotification(name, event);
+    wakePoller(name);
   });
 }
 
@@ -93,10 +170,16 @@ function broadcast(event, voiceOnly = false, targetName = null) {
     if (voiceOnly && !voiceTargets.has(name)) return;
     try { res.write(data); } catch {}
   });
+  clients.forEach((c, name) => {
+    if (targetName && name !== targetName) return;
+    if (voiceOnly && !voiceTargets.has(name)) return;
+    queueNotification(name, event);
+    wakePoller(name);
+  });
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', clients: sseClients.size, voiceTargets: [...voiceTargets] });
+  res.json({ status: 'ok', clients: clients.size, voiceTargets: [...voiceTargets] });
 });
 
 app.get('/api/clients', (req, res) => {
@@ -110,6 +193,9 @@ app.delete('/api/client/:name', (req, res) => {
   const { name } = req.params;
   clients.delete(name);
   sseClients.delete(name);
+  notificationQueues.delete(name);
+  const waiter = pollWaiters.get(name);
+  if (waiter) { clearTimeout(waiter.timer); pollWaiters.delete(name); }
   voiceTargets.delete(name);
   saveState();
   broadcastClientList();
@@ -139,17 +225,20 @@ app.post('/api/notify', (req, res) => {
   const { text, eventType, target, broadcast: isBroadcast } = req.body;
   console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` → ${target}` : ''}${isBroadcast ? ' [BROADCAST]' : ''}`);
 
+  const ts = Date.now();
+
   broadcast({
     type: 'notification',
     text,
     eventType,
-    timestamp: Date.now()
+    timestamp: ts
   }, false, target || null);
 
   broadcast({
     type: 'speak',
     text,
-    lang: 'es-MX'
+    lang: 'es-MX',
+    timestamp: ts
   }, !isBroadcast, target || null);
 
   res.json({ status: 'sent', broadcast: !!isBroadcast });
@@ -157,7 +246,7 @@ app.post('/api/notify', (req, res) => {
 
 app.post('/api/tts', (req, res) => {
   const { text, target } = req.body;
-  broadcast({ type: 'speak', text, lang: 'es-MX' }, true, target || null);
+  broadcast({ type: 'speak', text, lang: 'es-MX', timestamp: Date.now() }, true, target || null);
   res.json({ status: 'speaking' });
 });
 
@@ -198,7 +287,7 @@ wss.on('connection', (ws, req) => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'speak') {
-        broadcast({ type: 'speak', text: msg.text, lang: 'es-MX' }, true);
+        broadcast({ type: 'speak', text: msg.text, lang: 'es-MX', timestamp: Date.now() }, true);
       } else if (msg.type === 'listen') {
         broadcast({ type: 'listening', active: msg.active });
       }
@@ -222,6 +311,7 @@ setInterval(() => {
     if (now - client.lastSeen > 300000) {
       clients.delete(name);
       sseClients.delete(name);
+      notificationQueues.delete(name);
     }
   });
 }, 60000);
