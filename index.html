@@ -194,9 +194,8 @@ function saveName(name) {
       body: JSON.stringify({ name: myName, enabled: true })
     });
     fetch('/api/client/' + encodeURIComponent(oldName), { method: 'DELETE' });
-    pollActive = false;
   }
-  connectPoll();
+  connectWS();
   setTimeout(() => playBeep(), 500);
 }
 
@@ -439,86 +438,67 @@ function addNotif(text, voice) {
   }
 }
 
-let pollLastSeen = 0;
-let pollAbort = null;
-let pollActive = false;
+let ws = null;
+let wsReconnectDelay = 1000;
 
-function startPolling() {
-  if (!myName) return;
-  if (pollActive) return;
-  pollActive = true;
-  pollLoop();
-}
+function connectWS() {
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName));
 
-function pollLoop() {
-  if (!myName) { pollActive = false; return; }
-  const controller = new AbortController();
-  pollAbort = controller;
-  const timeout = setTimeout(() => controller.abort(), POLL_TIMEOUT_MS + 5000);
+  ws.onopen = () => {
+    console.log('WebSocket connected');
+    setConnected(true);
+    wsReconnectDelay = 1000;
+  };
 
-  fetch('/api/poll?name=' + encodeURIComponent(myName) + '&since=' + pollLastSeen, { signal: controller.signal })
-    .then(r => r.json())
-    .then(data => {
-      clearTimeout(timeout);
-      setConnected(true);
-      if (data.clients) {
-        clientList = data.clients;
-        voiceTargets = data.voiceTargets || [];
+  ws.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'connected') {
+        clientList = d.clients || [];
+        voiceTargets = d.voiceTargets || [];
         renderClients(clientList, voiceTargets);
+      } else if (d.type === 'clients') {
+        clientList = d.clients || [];
+        voiceTargets = d.voiceTargets || [];
+        renderClients(clientList, voiceTargets);
+      } else if (d.type === 'notification') {
+        const amIVoiceTarget = voiceTargets.includes(myName);
+        addNotif(d.text, amIVoiceTarget);
+      } else if (d.type === 'speak') {
+        speakText(d.text);
+      } else if (d.type === 'show_text') {
+        speech.textContent = d.text;
+      } else if (d.type === 'listening') {
+        setListening(d.active);
+        if (d.active) speech.textContent = 'Escuchando...';
+      } else if (d.type === 'start_mic') {
+        setListening(true);
+        speech.textContent = 'Grabando...';
+        startMicCapture(d.timeout || 10);
       }
-      if (data.events && data.events.length > 0) { data.events = data.events.slice(-5);
-        data.events.forEach(d => {
-          if (d.type === 'notification') {
-            const amIVoiceTarget = voiceTargets.includes(myName);
-            addNotif(d.text, amIVoiceTarget);
-          } else if (d.type === 'speak') {
-            speakText(d.text);
-          } else if (d.type === 'clients') {
-            clientList = d.clients || [];
-            voiceTargets = d.voiceTargets || [];
-            renderClients(clientList, voiceTargets);
-          } else if (d.type === 'show_text') {
-            speech.textContent = d.text;
-          } else if (d.type === 'listening') {
-            setListening(d.active);
-            if (d.active) speech.textContent = 'Escuchando...';
-          } else if (d.type === 'start_mic') {
-            setListening(true);
-            speech.textContent = 'Grabando...';
-            startMicCapture(d.timeout || 10);
-          }
-          if (d.timestamp) pollLastSeen = Math.max(pollLastSeen, d.timestamp);
-        });
-      }
-      pollActive = false;
-      pollLoop();
-    })
-    .catch(() => {
-      clearTimeout(timeout);
-      setConnected(false);
-      pollActive = false;
-      setTimeout(pollLoop, 2000);
-    });
-}
+    } catch(err) {}
+  };
 
-const POLL_TIMEOUT_MS = 30000;
+  ws.onclose = () => {
+    setConnected(false);
+    setTimeout(connectWS, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+  };
+
+  ws.onerror = () => {};
+}
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && myName) {
-    pollActive = false;
-    startPolling();
+    if (!ws || ws.readyState !== WebSocket.OPEN) connectWS();
   }
 });
 
 if (myName) {
-  startPolling();
+  connectWS();
 }
-
-setInterval(() => {
-  if (!myName) return;
-  if (!pollActive) startPolling();
-  fetch('/api/health').catch(() => {});
-}, 30000);
 
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;

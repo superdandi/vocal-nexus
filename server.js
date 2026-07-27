@@ -4,6 +4,7 @@ const { WebSocketServer } = require('ws');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,189 +14,50 @@ app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '50mb' }));
 
 const DATA_FILE = path.join(__dirname, 'voice-state.json');
+const CACHE_DIR = path.join(__dirname, 'cache');
 
 function loadState() {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
-    return { voiceTargets: [] };
-  }
+  try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { return { voiceTargets: [] }; }
 }
-
-function saveState() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({ voiceTargets: [...voiceTargets] }));
-}
+function saveState() { fs.writeFileSync(DATA_FILE, JSON.stringify({ voiceTargets: [...voiceTargets] })); }
 
 let state = loadState();
 let voiceTargets = new Set(state.voiceTargets);
 let clients = new Map();
-const sseClients = new Map();
-
-const notificationQueues = new Map();
-const pollWaiters = new Map();
-const POLL_TIMEOUT = 30000;
-
-function queueNotification(name, event) {
-  if (!notificationQueues.has(name)) {
-    notificationQueues.set(name, []);
-  }
-  const queue = notificationQueues.get(name);
-  queue.push(event);
-  if (queue.length > 100) queue.shift();
-}
-
-function getQueuedNotifications(name, since) {
-  const queue = notificationQueues.get(name) || [];
-  return queue.filter(e => e.timestamp > since);
-}
-
-function wakePoller(name) {
-  const waiter = pollWaiters.get(name);
-  if (waiter) {
-    clearTimeout(waiter.timer);
-    pollWaiters.delete(name);
-    const queue = getQueuedNotifications(name, waiter.since);
-    try {
-      waiter.res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
-    } catch {}
-  }
-}
-
-app.get('/api/poll', (req, res) => {
-  const name = req.query.name || 'anonymous';
-  const since = parseInt(req.query.since) || 0;
-
-  clients.set(name, {
-    name,
-    connected: true,
-    voiceEnabled: voiceTargets.has(name),
-    lastSeen: Date.now()
-  });
-
-  const queue = getQueuedNotifications(name, since);
-  if (queue.length > 0) {
-    clients.get(name).lastSeen = Date.now();
-    return res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
-  }
-
-  const existing = pollWaiters.get(name);
-  if (existing) {
-    clearTimeout(existing.timer);
-    pollWaiters.delete(name);
-  }
-
-  const timer = setTimeout(() => {
-    pollWaiters.delete(name);
-    if (clients.has(name)) clients.get(name).lastSeen = Date.now();
-    try {
-      res.json({ events: [], clients: getClientList(), voiceTargets: [...voiceTargets] });
-    } catch {}
-  }, POLL_TIMEOUT);
-
-  pollWaiters.set(name, { res, since, timer });
-
-  req.on('close', () => {
-    clearTimeout(timer);
-    pollWaiters.delete(name);
-  });
-});
-
-app.get('/events', (req, res) => {
-  const name = req.query.name || 'anonymous';
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*'
-  });
-
-  clients.set(name, {
-    name,
-    connected: true,
-    voiceEnabled: voiceTargets.has(name),
-    lastSeen: Date.now()
-  });
-  sseClients.set(name, res);
-
-  res.write(`data: ${JSON.stringify({
-    type: 'connected',
-    clients: getClientList(),
-    voiceTargets: [...voiceTargets]
-  })}\n\n`);
-
-  broadcastClientList();
-
-  const heartbeat = setInterval(() => {
-    try { res.write(': heartbeat\n\n'); } catch {}
-  }, 6000);
-
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    if (clients.has(name)) {
-      clients.get(name).connected = false;
-    }
-    sseClients.delete(name);
-    broadcastClientList();
-  });
-});
+let wsClients = new Map();
 
 function getClientList() {
   return [...clients.entries()].map(([name, c]) => ({
-    name,
-    connected: c.connected,
-    voiceEnabled: voiceTargets.has(name)
+    name, connected: c.connected, voiceEnabled: voiceTargets.has(name)
   }));
 }
 
 function broadcastClientList() {
-  const event = {
-    type: 'clients',
-    clients: getClientList(),
-    voiceTargets: [...voiceTargets]
-  };
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  sseClients.forEach((res, name) => {
-    try { res.write(data); } catch {}
-  });
-  clients.forEach((c, name) => {
-    queueNotification(name, event);
-    wakePoller(name);
-  });
+  const event = { type: 'clients', clients: getClientList(), voiceTargets: [...voiceTargets] };
+  wsClients.forEach((ws, name) => { try { ws.send(JSON.stringify(event)); } catch {} });
 }
 
 function broadcast(event, voiceOnly = false, targetName = null) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  sseClients.forEach((res, name) => {
+  wsClients.forEach((ws, name) => {
     if (targetName && name !== targetName) return;
     if (voiceOnly && !voiceTargets.has(name)) return;
-    try { res.write(data); } catch {}
-  });
-  clients.forEach((c, name) => {
-    if (targetName && name !== targetName) return;
-    if (voiceOnly && !voiceTargets.has(name)) return;
-    queueNotification(name, event);
-    wakePoller(name);
+    try { ws.send(JSON.stringify(event)); } catch {}
   });
 }
 
+// HTTP API endpoints
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', clients: clients.size, voiceTargets: [...voiceTargets] });
 });
 
 app.get('/api/clients', (req, res) => {
-  res.json({
-    clients: getClientList(),
-    voiceTargets: [...voiceTargets]
-  });
+  res.json({ clients: getClientList(), voiceTargets: [...voiceTargets] });
 });
 
 app.delete('/api/client/:name', (req, res) => {
   const { name } = req.params;
   clients.delete(name);
-  sseClients.delete(name);
-  notificationQueues.delete(name);
-  const waiter = pollWaiters.get(name);
-  if (waiter) { clearTimeout(waiter.timer); pollWaiters.delete(name); }
+  wsClients.delete(name);
   voiceTargets.delete(name);
   saveState();
   broadcastClientList();
@@ -205,17 +67,8 @@ app.delete('/api/client/:name', (req, res) => {
 app.post('/api/voice-target', (req, res) => {
   const { name, enabled } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-
-  if (enabled) {
-    voiceTargets.add(name);
-  } else {
-    voiceTargets.delete(name);
-  }
-
-  if (clients.has(name)) {
-    clients.get(name).voiceEnabled = enabled;
-  }
-
+  if (enabled) { voiceTargets.add(name); } else { voiceTargets.delete(name); }
+  if (clients.has(name)) { clients.get(name).voiceEnabled = enabled; }
   saveState();
   broadcastClientList();
   res.json({ name, voiceEnabled: enabled, voiceTargets: [...voiceTargets] });
@@ -223,23 +76,12 @@ app.post('/api/voice-target', (req, res) => {
 
 app.post('/api/notify', (req, res) => {
   const { text, eventType, target, broadcast: isBroadcast } = req.body;
-  console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` → ${target}` : ''}${isBroadcast ? ' [BROADCAST]' : ''}`);
+  console.log(`[NOTIFY] ${eventType}: "${text}"${target ? ` -> ${target}` : ''}${isBroadcast ? ' [BROADCAST]' : ''}`);
 
   const ts = Date.now();
 
-  broadcast({
-    type: 'notification',
-    text,
-    eventType,
-    timestamp: ts
-  }, false, target || null);
-
-  broadcast({
-    type: 'speak',
-    text,
-    lang: 'es-MX',
-    timestamp: ts
-  }, !isBroadcast, target || null);
+  broadcast({ type: 'notification', text, eventType, timestamp: ts }, false, target || null);
+  broadcast({ type: 'speak', text, lang: 'es-MX', timestamp: ts }, !isBroadcast, target || null);
 
   res.json({ status: 'sent', broadcast: !!isBroadcast });
 });
@@ -250,25 +92,14 @@ app.post('/api/tts', (req, res) => {
   res.json({ status: 'speaking' });
 });
 
-const crypto = require('crypto');
-const CACHE_DIR = path.join(__dirname, 'cache');
-
+// TTS endpoint with cache
 function getCachedTTS(text) {
   const hash = crypto.createHash('md5').update(text).digest('hex');
-  const cachePath = path.join(CACHE_DIR, hash + '.wav');
-  try {
-    if (fs.existsSync(cachePath)) {
-      return fs.readFileSync(cachePath);
-    }
-  } catch {}
-  return null;
+  const p = path.join(CACHE_DIR, hash + '.wav');
+  try { if (fs.existsSync(p)) return fs.readFileSync(p); } catch {} return null;
 }
-
-function cacheTTS(text, wavData) {
-  try {
-    const hash = crypto.createHash('md5').update(text).digest('hex');
-    fs.writeFileSync(path.join(CACHE_DIR, hash + '.wav'), wavData);
-  } catch {}
+function cacheTTS(text, wav) {
+  try { const h = crypto.createHash('md5').update(text).digest('hex'); fs.writeFileSync(path.join(CACHE_DIR, h + '.wav'), wav); } catch {}
 }
 
 app.get('/api/tts', (req, res) => {
@@ -276,11 +107,7 @@ app.get('/api/tts', (req, res) => {
   if (!text) return res.status(400).json({ error: 'text required' });
 
   const cached = getCachedTTS(text);
-  if (cached) {
-    console.log(`[TTS] Cache hit: "${text}" (${cached.length} bytes)`);
-    res.set('Content-Type', 'audio/wav');
-    return res.send(cached);
-  }
+  if (cached) { res.set('Content-Type', 'audio/wav'); return res.send(cached); }
 
   const tmpFile = '/tmp/tts_' + Date.now() + '.wav';
   const safeText = text.replace(/'/g, "'\\''");
@@ -288,38 +115,32 @@ app.get('/api/tts', (req, res) => {
     if (!err && fs.existsSync(tmpFile)) {
       const data = fs.readFileSync(tmpFile);
       fs.unlinkSync(tmpFile);
-      if (data.length > 100) {
-        console.log(`[TTS] espeak-ng OK (${data.length} bytes)`);
-        cacheTTS(text, data);
-        res.set('Content-Type', 'audio/wav');
-        return res.send(data);
-      }
+      if (data.length > 100) { cacheTTS(text, data); res.set('Content-Type', 'audio/wav'); return res.send(data); }
     }
-    console.log('[TTS] espeak-ng failed, trying Kokoro');
     const kokoroPath = path.join(__dirname, 'venv', 'bin', 'python');
     const kokoroScript = path.join(__dirname, 'tts_kokoro.py');
     exec(`'${kokoroPath}' '${kokoroScript}' '${safeText}' > '${tmpFile}'`, { timeout: 30000 }, (err2) => {
-      if (err2 || !fs.existsSync(tmpFile)) {
-        console.log('[TTS] All TTS failed');
-        if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-        return res.status(500).json({ error: 'tts failed' });
-      }
-      const data = fs.readFileSync(tmpFile);
-      fs.unlinkSync(tmpFile);
-      console.log(`[TTS] Kokoro OK (${data.length} bytes)`);
+      if (err2 || !fs.existsSync(tmpFile)) { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); return res.status(500).json({ error: 'tts failed' }); }
+      const data = fs.readFileSync(tmpFile); fs.unlinkSync(tmpFile);
       cacheTTS(text, data);
-      res.set('Content-Type', 'audio/wav');
-      res.send(data);
+      res.set('Content-Type', 'audio/wav'); res.send(data);
     });
   });
 });
 
+// WebSocket server
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const name = url.searchParams.get('name') || 'anonymous';
-  console.log(`[WS] Client connected: ${name}`);
+  console.log(`[WS] Connected: ${name}`);
+
+  clients.set(name, { name, connected: true, voiceEnabled: voiceTargets.has(name), lastSeen: Date.now() });
+  wsClients.set(name, ws);
+
+  ws.send(JSON.stringify({ type: 'connected', clients: getClientList(), voiceTargets: [...voiceTargets] }));
+  broadcastClientList();
 
   ws.on('message', (data) => {
     try {
@@ -333,26 +154,39 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    console.log(`[WS] Client disconnected: ${name}`);
+    console.log(`[WS] Disconnected: ${name}`);
+    if (clients.has(name)) clients.get(name).connected = false;
+    wsClients.delete(name);
+    broadcastClientList();
+  });
+
+  ws.on('pong', () => {
+    if (clients.has(name)) clients.get(name).lastSeen = Date.now();
   });
 });
 
-const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
-eviWss.on('connection', (ws) => {
-  ws.send(JSON.stringify({ type: 'evi_ready' }));
-  ws.on('close', () => {});
-});
+// WebSocket heartbeat
+setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
 
+wss.on('connection', (ws) => { ws.isAlive = true; });
+
+// Cleanup stale clients
 setInterval(() => {
   const now = Date.now();
   clients.forEach((client, name) => {
-    if (now - client.lastSeen > 300000) {
-      clients.delete(name);
-      sseClients.delete(name);
-      notificationQueues.delete(name);
-    }
+    if (now - client.lastSeen > 300000) { clients.delete(name); wsClients.delete(name); }
   });
 }, 60000);
+
+// EVI WebSocket
+const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
+eviWss.on('connection', (ws) => { ws.send(JSON.stringify({ type: 'evi_ready' })); ws.on('close', () => {}); });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  ╔══════════════════════════════════════╗`);
