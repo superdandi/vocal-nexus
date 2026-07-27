@@ -333,13 +333,28 @@ function speakText(text) {
 }
 
 function tryTTS(text) {
-  const a = new Audio('/api/tts?text=' + encodeURIComponent(text));
-  a.volume = 1.0;
-  let done = false;
-  const finish = () => { if (!done) { done = true; setSpeaking(false); } };
-  a.onended = finish;
-  a.onerror = () => { console.log('TTS load error'); finish(); trySpeech(text); };
-  a.play().catch(() => { console.log('TTS play blocked'); finish(); trySpeech(text); });
+  if (hasGoodVoices()) {
+    console.log('Using speechSynthesis (native voices)');
+    trySpeech(text);
+  } else {
+    console.log('Using server TTS (Kokoro/espeak-ng)');
+    const a = new Audio('/api/tts?text=' + encodeURIComponent(text));
+    a.volume = 1.0;
+    let done = false;
+    const finish = () => { if (!done) { done = true; setSpeaking(false); } };
+    a.onended = finish;
+    a.onerror = () => { console.log('TTS load error'); finish(); trySpeech(text); };
+    a.play().catch(() => { console.log('TTS play blocked'); finish(); trySpeech(text); });
+  }
+}
+
+function hasGoodVoices() {
+  if (!('speechSynthesis' in window)) return false;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return false;
+  const hasNative = voices.some(v => v.localService === true && !v.name.includes('Google'));
+  const hasEs = voices.some(v => v.lang.startsWith('es'));
+  return hasNative && hasEs;
 }
 
 function trySpeech(text) {
