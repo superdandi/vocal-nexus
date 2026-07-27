@@ -56,7 +56,12 @@ app.get('/events', (req, res) => {
 
   broadcastClientList();
 
+  const heartbeat = setInterval(() => {
+    try { res.write(': heartbeat\n\n'); } catch {}
+  }, 30000);
+
   req.on('close', () => {
+    clearInterval(heartbeat);
     if (clients.has(name)) {
       clients.get(name).connected = false;
     }

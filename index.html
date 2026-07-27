@@ -412,11 +412,14 @@ function addNotif(text, voice) {
 }
 
 let es = null;
+let reconnectDelay = 1000;
+let reconnectTimer = null;
 
 function connectSSE() {
   if (es) es.close();
+  clearTimeout(reconnectTimer);
   es = new EventSource('/events?name=' + encodeURIComponent(myName));
-  es.onopen = () => setConnected(true);
+  es.onopen = () => { setConnected(true); reconnectDelay = 1000; };
   es.onmessage = (e) => {
     try {
       const d = JSON.parse(e.data);
@@ -445,8 +448,22 @@ function connectSSE() {
       }
     } catch(err) {}
   };
-  es.onerror = () => setConnected(false);
+  es.onerror = () => {
+    setConnected(false);
+    es.close();
+    reconnectTimer = setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      connectSSE();
+    }, reconnectDelay);
+  };
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && myName && (!es || es.readyState === EventSource.CLOSED)) {
+    reconnectDelay = 1000;
+    connectSSE();
+  }
+});
 
 if (myName) {
   connectSSE();
@@ -454,7 +471,6 @@ if (myName) {
 
 audio.onended = () => setSpeaking(false);
 audio.onerror = () => { setSpeaking(false); speech.textContent = '(Error audio)'; };
-setInterval(() => { if (es && es.readyState === EventSource.CLOSED) setConnected(false); }, 2000);
 
 function pcmToWav(pcmData, sampleRate) {
   const numChannels = 1;
