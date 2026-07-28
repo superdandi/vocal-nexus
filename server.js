@@ -10,6 +10,8 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3777;
 
+const wss = new WebSocketServer({ server });
+
 app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '50mb', verify: (req, res, buf) => {} }));
 
@@ -127,9 +129,6 @@ app.get('/api/tts', (req, res) => {
     });
   });
 });
-
-// WebSocket server
-const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
