@@ -11,7 +11,7 @@ const server = http.createServer(app);
 const PORT = process.env.PORT || 3777;
 
 app.use(express.static(path.join(__dirname)));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '50mb', verify: (req, res, buf) => {} }));
 
 const DATA_FILE = path.join(__dirname, 'voice-state.json');
 const CACHE_DIR = path.join(__dirname, 'cache');
