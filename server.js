@@ -1,5 +1,4 @@
 const express = require('express');
-const https = require('https');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const { exec } = require('child_process');
@@ -8,24 +7,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3777;
-const HTTP_PORT = 3778;
-
-let server;
-const certPath = path.join(__dirname, '192.168.1.84+2.pem');
-const keyPath = path.join(__dirname, '192.168.1.84+2-key.pem');
-
-if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-  console.log('[HTTPS] SSL certificates found, starting HTTPS server');
-  const options = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-  };
-  server = https.createServer(options, app);
-} else {
-  console.log('[HTTP] No SSL certificates, starting HTTP server');
-  server = http.createServer(app);
-}
 
 const wss = new WebSocketServer({ server });
 
@@ -204,24 +187,10 @@ setInterval(() => {
 const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
 eviWss.on('connection', (ws) => { ws.send(JSON.stringify({ type: 'evi_ready' })); ws.on('close', () => {}); });
 
-// HTTP fallback server for health checks and backward compatibility
-const httpApp = express();
-httpApp.get('/{path}', (req, res) => {
-  res.redirect(`https://192.168.1.84:${PORT}${req.path}`);
-});
-httpApp.get('/', (req, res) => {
-  res.redirect(`https://192.168.1.84:${PORT}/`);
-});
-const httpServer = http.createServer(httpApp);
-httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
-  console.log(`  [HTTP] Redirect server on port ${HTTP_PORT}`);
-});
-
 server.listen(PORT, '0.0.0.0', () => {
-  const proto = fs.existsSync(certPath) ? 'https' : 'http';
   console.log(`\n  ╔══════════════════════════════════════╗`);
   console.log(`  ║   OpenCode Voice Nexus               ║`);
-  console.log(`  ║   Puerto: ${PORT} (${proto.toUpperCase()})              ║`);
-  console.log(`  ║   ${proto}://192.168.1.84:${PORT}           ║`);
+  console.log(`  ║   Puerto: ${PORT}                         ║`);
+  console.log(`  ║   http://192.168.1.84:${PORT}           ║`);
   console.log(`  ╚══════════════════════════════════════╝\n`);
 });

@@ -450,7 +450,7 @@ let reconnectTimer = null;
 function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   if (ws) { try { ws.close(); } catch {} ws = null; }
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = 'ws:';
   const url = protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName);
   console.log('[WS] Connecting to:', url);
   ws = new WebSocket(url);
