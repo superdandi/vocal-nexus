@@ -124,6 +124,11 @@ body::after {
   </div>
 </div>
 <script>
+// Register Service Worker for background tab persistence
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 const audio = document.getElementById('audio');
 const statusEl = document.getElementById('status');
 const dot = document.getElementById('dot');
