@@ -206,8 +206,11 @@ eviWss.on('connection', (ws) => { ws.send(JSON.stringify({ type: 'evi_ready' }))
 
 // HTTP fallback server for health checks and backward compatibility
 const httpApp = express();
-httpApp.get('*', (req, res) => {
+httpApp.get('/{path}', (req, res) => {
   res.redirect(`https://192.168.1.84:${PORT}${req.path}`);
+});
+httpApp.get('/', (req, res) => {
+  res.redirect(`https://192.168.1.84:${PORT}/`);
 });
 const httpServer = http.createServer(httpApp);
 httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
