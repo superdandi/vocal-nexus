@@ -446,12 +446,14 @@ function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   if (ws) { try { ws.close(); } catch {} ws = null; }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName));
+  const url = protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName);
+  console.log('[WS] Connecting to:', url);
+  ws = new WebSocket(url);
 
   ws.onopen = () => {
-    console.log('WebSocket connected');
+    console.log('[WS] Connected successfully');
     setConnected(true);
-    wsReconnectDelay = 1000;
+    reconnectDelay = 1000;
   };
 
   ws.onmessage = (e) => {
@@ -483,14 +485,17 @@ function connectWS() {
     } catch(err) {}
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    console.log('[WS] Connection closed:', e.code, e.reason);
     setConnected(false);
     ws = null;
     setTimeout(connectWS, wsReconnectDelay);
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
   };
 
-  ws.onerror = () => {};
+  ws.onerror = (e) => {
+    console.log('[WS] Error:', e.message || 'unknown');
+  };
 }
 
 document.addEventListener('visibilitychange', () => {
