@@ -93,6 +93,25 @@ body::after {
 .modal-btn:hover { border-color: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); background: rgba(0,255,255,0.05); }
 .modal-hint { font-size: 0.6rem; color: rgba(255,255,255,0.2); margin-top: 0.8rem; }
 @media (max-width: 480px) { .holo-ring { width: 180px; height: 180px; } .holo-inner { width: 120px; height: 120px; } .title { font-size: 1.1rem; } #speech { font-size: 1rem; } }
+.activate-btn {
+  display: block;
+  margin: 1rem auto;
+  padding: 0.8rem 2rem;
+  background: rgba(0, 255, 255, 0.1);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  color: #0ff;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+.activate-btn:hover {
+  background: rgba(0, 255, 255, 0.2);
+  border-color: #0ff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
 </style>
 </head>
 <body>
@@ -112,6 +131,7 @@ body::after {
   <div class="viz-bars" id="vizBars"></div>
   <div class="notif-log" id="notifLog"></div>
   <div class="footer">▸ sistema de voz neural ▸</div>
+  <button id="activateAudio" class="activate-btn" style="display:none;">🔊 Activar audio</button>
 </div>
 <audio id="audio" autoplay style="display:none"></audio>
 <div class="modal-overlay" id="nameModal" style="display:none">
@@ -151,6 +171,15 @@ let speechUnlocked = false;
 let speaking = false;
 let listening = false;
 let renameOldName = null;
+
+const activateBtn = document.getElementById('activateAudio');
+if (activateBtn) {
+  activateBtn.addEventListener('click', () => {
+    unlockSpeech();
+    activateBtn.style.display = 'none';
+    console.log('Audio activated by user click');
+  });
+}
 
 function showRenameModal(oldName) {
   renameOldName = oldName;
@@ -207,6 +236,8 @@ function saveName(name) {
 
 if (!myName) {
   showModal();
+} else if (activateBtn) {
+  activateBtn.style.display = 'block';
 }
 
 nameBtn.addEventListener('click', () => {
@@ -239,6 +270,7 @@ function unlockSpeech() {
     window.speechSynthesis.speak(u);
     console.log('speechSynthesis unlock attempted');
   } catch (e) { console.log('speechSynthesis unlock error:', e); }
+  if (activateBtn) activateBtn.style.display = 'none';
 }
 
 document.addEventListener('click', unlockSpeech, { once: true });
