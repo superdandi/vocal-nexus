@@ -199,8 +199,9 @@ function saveName(name) {
       body: JSON.stringify({ name: myName, enabled: true })
     });
     fetch('/api/client/' + encodeURIComponent(oldName), { method: 'DELETE' });
+    pollingActive = false;
   }
-  connectWS();
+  startPolling();
   setTimeout(() => playBeep(), 500);
 }
 
@@ -444,11 +445,9 @@ function addNotif(text, voice) {
 }
 
 let ws = null;
-let wsReconnectDelay = 1000;
-let reconnectTimer = null;
-let wsFailCount = 0;
 let pollingActive = false;
 let pollLastSeen = 0;
+let pollTimer = null;
 
 function handleEvent(d) {
   if (d.type === 'connected') {
@@ -476,47 +475,6 @@ function handleEvent(d) {
   }
 }
 
-function connectWS() {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  if (ws) { try { ws.close(); } catch {} ws = null; }
-  const protocol = 'ws:';
-  const url = protocol + '//' + location.host + '/ws?name=' + encodeURIComponent(myName);
-  console.log('[WS] Connecting to:', url);
-  ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    console.log('[WS] Connected successfully');
-    setConnected(true);
-    wsReconnectDelay = 1000;
-    wsFailCount = 0;
-  };
-
-  ws.onmessage = (e) => {
-    try {
-      const d = JSON.parse(e.data);
-      handleEvent(d);
-    } catch(err) {}
-  };
-
-  ws.onclose = (e) => {
-    console.log('[WS] Connection closed:', e.code, e.reason);
-    setConnected(false);
-    ws = null;
-    wsFailCount++;
-    if (wsFailCount >= 3) {
-      console.log('[WS] Too many failures, falling back to long polling');
-      startPolling();
-    } else {
-      setTimeout(connectWS, wsReconnectDelay);
-      wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
-    }
-  };
-
-  ws.onerror = (e) => {
-    console.log('[WS] Error:', e.message || 'unknown');
-  };
-}
-
 function startPolling() {
   if (pollingActive) return;
   pollingActive = true;
@@ -526,13 +484,11 @@ function startPolling() {
 }
 
 function pollLoop() {
-  if (!myName || !pollingActive) return;
-  const timeout = setTimeout(() => { setConnected(false); }, 35000);
+  if (!myName || !pollingActive) { pollingActive = false; return; }
 
   fetch('/api/poll?name=' + encodeURIComponent(myName) + '&since=' + pollLastSeen)
     .then(r => r.json())
     .then(data => {
-      clearTimeout(timeout);
       setConnected(true);
       if (data.clients) {
         clientList = data.clients;
@@ -545,26 +501,24 @@ function pollLoop() {
           if (d.timestamp) pollLastSeen = Math.max(pollLastSeen, d.timestamp);
         });
       }
+      // Continue polling immediately
       pollLoop();
     })
     .catch(() => {
-      clearTimeout(timeout);
       setConnected(false);
-      setTimeout(pollLoop, 5000);
+      // Retry after 3 seconds
+      pollTimer = setTimeout(pollLoop, 3000);
     });
 }
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && myName) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connectWS, 500);
-    }
+    if (!pollingActive) startPolling();
   }
 });
 
 window.addEventListener('load', () => {
-  if (myName) setTimeout(connectWS, 1000);
+  if (myName) setTimeout(startPolling, 500);
 });
 
 function pcmToWav(pcmData, sampleRate) {

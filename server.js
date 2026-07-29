@@ -1,6 +1,5 @@
 const express = require('express');
 const http = require('http');
-const { WebSocketServer } = require('ws');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -9,8 +8,6 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3777;
-
-const wss = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '50mb', verify: (req, res, buf) => {} }));
@@ -26,7 +23,6 @@ function saveState() { fs.writeFileSync(DATA_FILE, JSON.stringify({ voiceTargets
 let state = loadState();
 let voiceTargets = new Set(state.voiceTargets);
 let clients = new Map();
-let wsClients = new Map();
 let pollQueues = new Map();
 let pollWaiters = new Map();
 
@@ -44,13 +40,6 @@ function queueEvent(name, event) {
 }
 
 function broadcastAll(event, voiceOnly = false, targetName = null) {
-  // WebSocket delivery
-  wsClients.forEach((ws, name) => {
-    if (targetName && name !== targetName) return;
-    if (voiceOnly && !voiceTargets.has(name)) return;
-    try { ws.send(JSON.stringify(event)); } catch {}
-  });
-  // Long polling delivery
   clients.forEach((c, name) => {
     if (targetName && name !== targetName) return;
     if (voiceOnly && !voiceTargets.has(name)) return;
@@ -70,6 +59,7 @@ function wakePoller(name) {
     clearTimeout(w.timer);
     pollWaiters.delete(name);
     const queue = (pollQueues.get(name) || []).filter(e => e.timestamp > w.since);
+    console.log(`[WAKE] ${name}: ${queue.length} events`);
     try { w.res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] }); } catch {}
   }
 }
@@ -84,6 +74,7 @@ app.get('/api/poll', (req, res) => {
   const queue = (pollQueues.get(name) || []).filter(e => e.timestamp > since);
   if (queue.length > 0) {
     clients.get(name).lastSeen = Date.now();
+    console.log(`[POLL] ${name}: ${queue.length} events immediately`);
     return res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
   }
 
@@ -112,7 +103,6 @@ app.get('/api/clients', (req, res) => {
 app.delete('/api/client/:name', (req, res) => {
   const { name } = req.params;
   clients.delete(name);
-  wsClients.delete(name);
   pollQueues.delete(name);
   const w = pollWaiters.get(name);
   if (w) { clearTimeout(w.timer); pollWaiters.delete(name); }
@@ -186,68 +176,13 @@ app.get('/api/tts', (req, res) => {
   });
 });
 
-// WebSocket handlers
-wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const name = url.searchParams.get('name') || 'anonymous';
-  console.log(`[WS] Connected: ${name}`);
-
-  clients.set(name, { name, connected: true, voiceEnabled: voiceTargets.has(name), lastSeen: Date.now() });
-  wsClients.set(name, ws);
-
-  // Send initial data AFTER a small delay to let connection settle
-  setTimeout(() => {
-    try {
-      ws.send(JSON.stringify({ type: 'connected', clients: getClientList(), voiceTargets: [...voiceTargets] }));
-      broadcastClientList();
-    } catch {}
-  }, 100);
-
-  ws.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data);
-      if (msg.type === 'speak') {
-        broadcastAll({ type: 'speak', text: msg.text, lang: 'es-MX', timestamp: Date.now() }, true);
-      } else if (msg.type === 'listen') {
-        broadcastAll({ type: 'listening', active: msg.active });
-      }
-    } catch (e) {}
-  });
-
-  ws.on('close', () => {
-    console.log(`[WS] Disconnected: ${name}`);
-    if (clients.has(name)) clients.get(name).connected = false;
-    wsClients.delete(name);
-    broadcastClientList();
-  });
-
-  ws.on('pong', () => {
-    if (clients.has(name)) clients.get(name).lastSeen = Date.now();
-  });
-});
-
-// WebSocket heartbeat
-setInterval(() => {
-  wss.clients.forEach(ws => {
-    if (ws.isAlive === false) return ws.terminate();
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
-
-wss.on('connection', (ws) => { ws.isAlive = true; });
-
 // Cleanup stale clients
 setInterval(() => {
   const now = Date.now();
   clients.forEach((client, name) => {
-    if (now - client.lastSeen > 300000) { clients.delete(name); wsClients.delete(name); }
+    if (now - client.lastSeen > 300000) { clients.delete(name); pollQueues.delete(name); }
   });
 }, 60000);
-
-// EVI WebSocket
-const eviWss = new WebSocketServer({ server, path: '/ws/evi' });
-eviWss.on('connection', (ws) => { ws.send(JSON.stringify({ type: 'evi_ready' })); ws.on('close', () => {}); });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  ╔══════════════════════════════════════╗`);
