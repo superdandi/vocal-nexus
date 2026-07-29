@@ -446,6 +446,35 @@ function addNotif(text, voice) {
 let ws = null;
 let wsReconnectDelay = 1000;
 let reconnectTimer = null;
+let wsFailCount = 0;
+let pollingActive = false;
+let pollLastSeen = 0;
+
+function handleEvent(d) {
+  if (d.type === 'connected') {
+    clientList = d.clients || [];
+    voiceTargets = d.voiceTargets || [];
+    renderClients(clientList, voiceTargets);
+  } else if (d.type === 'clients') {
+    clientList = d.clients || [];
+    voiceTargets = d.voiceTargets || [];
+    renderClients(clientList, voiceTargets);
+  } else if (d.type === 'notification') {
+    const amIVoiceTarget = voiceTargets.includes(myName);
+    addNotif(d.text, amIVoiceTarget);
+  } else if (d.type === 'speak') {
+    speakText(d.text);
+  } else if (d.type === 'show_text') {
+    speech.textContent = d.text;
+  } else if (d.type === 'listening') {
+    setListening(d.active);
+    if (d.active) speech.textContent = 'Escuchando...';
+  } else if (d.type === 'start_mic') {
+    setListening(true);
+    speech.textContent = 'Grabando...';
+    startMicCapture(d.timeout || 10);
+  }
+}
 
 function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -458,35 +487,14 @@ function connectWS() {
   ws.onopen = () => {
     console.log('[WS] Connected successfully');
     setConnected(true);
-    reconnectDelay = 1000;
+    wsReconnectDelay = 1000;
+    wsFailCount = 0;
   };
 
   ws.onmessage = (e) => {
     try {
       const d = JSON.parse(e.data);
-      if (d.type === 'connected') {
-        clientList = d.clients || [];
-        voiceTargets = d.voiceTargets || [];
-        renderClients(clientList, voiceTargets);
-      } else if (d.type === 'clients') {
-        clientList = d.clients || [];
-        voiceTargets = d.voiceTargets || [];
-        renderClients(clientList, voiceTargets);
-      } else if (d.type === 'notification') {
-        const amIVoiceTarget = voiceTargets.includes(myName);
-        addNotif(d.text, amIVoiceTarget);
-      } else if (d.type === 'speak') {
-        speakText(d.text);
-      } else if (d.type === 'show_text') {
-        speech.textContent = d.text;
-      } else if (d.type === 'listening') {
-        setListening(d.active);
-        if (d.active) speech.textContent = 'Escuchando...';
-      } else if (d.type === 'start_mic') {
-        setListening(true);
-        speech.textContent = 'Grabando...';
-        startMicCapture(d.timeout || 10);
-      }
+      handleEvent(d);
     } catch(err) {}
   };
 
@@ -494,13 +502,56 @@ function connectWS() {
     console.log('[WS] Connection closed:', e.code, e.reason);
     setConnected(false);
     ws = null;
-    setTimeout(connectWS, wsReconnectDelay);
-    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+    wsFailCount++;
+    if (wsFailCount >= 3) {
+      console.log('[WS] Too many failures, falling back to long polling');
+      startPolling();
+    } else {
+      setTimeout(connectWS, wsReconnectDelay);
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+    }
   };
 
   ws.onerror = (e) => {
     console.log('[WS] Error:', e.message || 'unknown');
   };
+}
+
+function startPolling() {
+  if (pollingActive) return;
+  pollingActive = true;
+  pollLastSeen = 0;
+  console.log('[POLL] Starting long polling');
+  pollLoop();
+}
+
+function pollLoop() {
+  if (!myName || !pollingActive) return;
+  const timeout = setTimeout(() => { setConnected(false); }, 35000);
+
+  fetch('/api/poll?name=' + encodeURIComponent(myName) + '&since=' + pollLastSeen)
+    .then(r => r.json())
+    .then(data => {
+      clearTimeout(timeout);
+      setConnected(true);
+      if (data.clients) {
+        clientList = data.clients;
+        voiceTargets = data.voiceTargets || [];
+        renderClients(clientList, voiceTargets);
+      }
+      if (data.events) {
+        data.events.forEach(d => {
+          handleEvent(d);
+          if (d.timestamp) pollLastSeen = Math.max(pollLastSeen, d.timestamp);
+        });
+      }
+      pollLoop();
+    })
+    .catch(() => {
+      clearTimeout(timeout);
+      setConnected(false);
+      setTimeout(pollLoop, 5000);
+    });
 }
 
 document.addEventListener('visibilitychange', () => {

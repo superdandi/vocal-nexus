@@ -27,6 +27,8 @@ let state = loadState();
 let voiceTargets = new Set(state.voiceTargets);
 let clients = new Map();
 let wsClients = new Map();
+let pollQueues = new Map();
+let pollWaiters = new Map();
 
 function getClientList() {
   return [...clients.entries()].map(([name, c]) => ({
@@ -34,18 +36,69 @@ function getClientList() {
   }));
 }
 
-function broadcastClientList() {
-  const event = { type: 'clients', clients: getClientList(), voiceTargets: [...voiceTargets] };
-  wsClients.forEach((ws, name) => { try { ws.send(JSON.stringify(event)); } catch {} });
+function queueEvent(name, event) {
+  if (!pollQueues.has(name)) pollQueues.set(name, []);
+  const q = pollQueues.get(name);
+  q.push(event);
+  if (q.length > 100) q.shift();
 }
 
-function broadcast(event, voiceOnly = false, targetName = null) {
+function broadcastAll(event, voiceOnly = false, targetName = null) {
+  // WebSocket delivery
   wsClients.forEach((ws, name) => {
     if (targetName && name !== targetName) return;
     if (voiceOnly && !voiceTargets.has(name)) return;
     try { ws.send(JSON.stringify(event)); } catch {}
   });
+  // Long polling delivery
+  clients.forEach((c, name) => {
+    if (targetName && name !== targetName) return;
+    if (voiceOnly && !voiceTargets.has(name)) return;
+    queueEvent(name, event);
+    wakePoller(name);
+  });
 }
+
+function broadcastClientList() {
+  const event = { type: 'clients', clients: getClientList(), voiceTargets: [...voiceTargets] };
+  broadcastAll(event);
+}
+
+function wakePoller(name) {
+  const w = pollWaiters.get(name);
+  if (w) {
+    clearTimeout(w.timer);
+    pollWaiters.delete(name);
+    const queue = (pollQueues.get(name) || []).filter(e => e.timestamp > w.since);
+    try { w.res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] }); } catch {}
+  }
+}
+
+// Long polling endpoint
+app.get('/api/poll', (req, res) => {
+  const name = req.query.name || 'anonymous';
+  const since = parseInt(req.query.since) || 0;
+
+  clients.set(name, { name, connected: true, voiceEnabled: voiceTargets.has(name), lastSeen: Date.now() });
+
+  const queue = (pollQueues.get(name) || []).filter(e => e.timestamp > since);
+  if (queue.length > 0) {
+    clients.get(name).lastSeen = Date.now();
+    return res.json({ events: queue, clients: getClientList(), voiceTargets: [...voiceTargets] });
+  }
+
+  const existing = pollWaiters.get(name);
+  if (existing) { clearTimeout(existing.timer); pollWaiters.delete(name); }
+
+  const timer = setTimeout(() => {
+    pollWaiters.delete(name);
+    if (clients.has(name)) clients.get(name).lastSeen = Date.now();
+    try { res.json({ events: [], clients: getClientList(), voiceTargets: [...voiceTargets] }); } catch {}
+  }, 30000);
+
+  pollWaiters.set(name, { res, since, timer });
+  req.on('close', () => { clearTimeout(timer); pollWaiters.delete(name); });
+});
 
 // HTTP API endpoints
 app.get('/api/health', (req, res) => {
@@ -60,6 +113,9 @@ app.delete('/api/client/:name', (req, res) => {
   const { name } = req.params;
   clients.delete(name);
   wsClients.delete(name);
+  pollQueues.delete(name);
+  const w = pollWaiters.get(name);
+  if (w) { clearTimeout(w.timer); pollWaiters.delete(name); }
   voiceTargets.delete(name);
   saveState();
   broadcastClientList();
@@ -82,15 +138,15 @@ app.post('/api/notify', (req, res) => {
 
   const ts = Date.now();
 
-  broadcast({ type: 'notification', text, eventType, timestamp: ts }, false, target || null);
-  broadcast({ type: 'speak', text, lang: 'es-MX', timestamp: ts }, !isBroadcast, target || null);
+  broadcastAll({ type: 'notification', text, eventType, timestamp: ts }, false, target || null);
+  broadcastAll({ type: 'speak', text, lang: 'es-MX', timestamp: ts }, !isBroadcast, target || null);
 
   res.json({ status: 'sent', broadcast: !!isBroadcast });
 });
 
 app.post('/api/tts', (req, res) => {
   const { text, target } = req.body;
-  broadcast({ type: 'speak', text, lang: 'es-MX', timestamp: Date.now() }, true, target || null);
+  broadcastAll({ type: 'speak', text, lang: 'es-MX', timestamp: Date.now() }, true, target || null);
   res.json({ status: 'speaking' });
 });
 
@@ -130,6 +186,7 @@ app.get('/api/tts', (req, res) => {
   });
 });
 
+// WebSocket handlers
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const name = url.searchParams.get('name') || 'anonymous';
@@ -138,16 +195,21 @@ wss.on('connection', (ws, req) => {
   clients.set(name, { name, connected: true, voiceEnabled: voiceTargets.has(name), lastSeen: Date.now() });
   wsClients.set(name, ws);
 
-  ws.send(JSON.stringify({ type: 'connected', clients: getClientList(), voiceTargets: [...voiceTargets] }));
-  broadcastClientList();
+  // Send initial data AFTER a small delay to let connection settle
+  setTimeout(() => {
+    try {
+      ws.send(JSON.stringify({ type: 'connected', clients: getClientList(), voiceTargets: [...voiceTargets] }));
+      broadcastClientList();
+    } catch {}
+  }, 100);
 
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'speak') {
-        broadcast({ type: 'speak', text: msg.text, lang: 'es-MX', timestamp: Date.now() }, true);
+        broadcastAll({ type: 'speak', text: msg.text, lang: 'es-MX', timestamp: Date.now() }, true);
       } else if (msg.type === 'listen') {
-        broadcast({ type: 'listening', active: msg.active });
+        broadcastAll({ type: 'listening', active: msg.active });
       }
     } catch (e) {}
   });
