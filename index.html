@@ -364,17 +364,17 @@ function trySpeechFirst(text, onDone) {
   const finish = () => { if (!done) { done = true; onDone(); } };
   const fallback = () => { if (!done) { done = true; console.log('speechSynthesis failed, fallback to espeak-ng'); serverTTS(text, onDone); } };
 
-  const timeout = setTimeout(fallback, 3000);
   try {
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'es-MX';
     utter.volume = 1.0;
-    utter.onend = () => { clearTimeout(timeout); finish(); };
-    utter.onerror = () => { clearTimeout(timeout); fallback(); };
+    utter.onend = () => { finish(); };
+    utter.onerror = () => { fallback(); };
     window.speechSynthesis.speak(utter);
-  } catch (e) { clearTimeout(timeout); fallback(); }
+    setTimeout(fallback, 5000);
+  } catch (e) { fallback(); }
 }
 
 function serverTTS(text, onDone) {
