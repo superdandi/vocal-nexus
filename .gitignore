@@ -1,3 +1,7 @@
 node_modules/
 .env
 voice-state.json
+cache/
+data/
+*.pem
+*.key

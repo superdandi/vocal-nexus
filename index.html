@@ -82,6 +82,24 @@ body::after {
 .notif-item.text-only { border-left: 2px solid rgba(255,255,255,0.1); }
 @keyframes notifFade { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
 @keyframes msgFade { 0% { opacity: 0; transform: translateY(5px); } 100% { opacity: 1; transform: translateY(0); } }
+.chat-section { margin-top: 0.8rem; text-align: left; }
+.chat-header { font-family: 'Orbitron', monospace; font-size: 0.55rem; letter-spacing: 3px; color: rgba(255,255,255,0.15); margin-bottom: 0.4rem; text-transform: uppercase; }
+.chat-messages { max-height: 200px; overflow-y: auto; padding: 0.4rem; border-radius: 8px; background: rgba(0, 255, 255, 0.02); border: 1px solid rgba(0, 255, 255, 0.06); margin-bottom: 0.4rem; scrollbar-width: thin; scrollbar-color: rgba(0,255,255,0.2) transparent; }
+.chat-messages:empty { display: none; }
+.chat-msg { padding: 0.25rem 0.5rem; margin: 0.1rem 0; border-radius: 6px; animation: msgFade 0.3s ease-out; display: flex; gap: 0.4rem; align-items: baseline; }
+.chat-msg .chat-from { color: #0ff; font-family: 'Orbitron', monospace; font-size: 0.55rem; letter-spacing: 1px; flex-shrink: 0; }
+.chat-msg .chat-text { color: rgba(255,255,255,0.7); font-size: 0.75rem; }
+.chat-msg .chat-time { color: rgba(255,255,255,0.15); font-family: 'Orbitron', monospace; font-size: 0.45rem; flex-shrink: 0; margin-left: auto; }
+.chat-msg.self .chat-from { color: #f0f; }
+.chat-input-row { display: flex; gap: 0.3rem; }
+.chat-input-row select { background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.15); border-radius: 4px; color: #0ff; font-family: 'Rajdhani', sans-serif; font-size: 0.7rem; padding: 0.3rem 0.4rem; outline: none; cursor: pointer; min-width: 80px; }
+.chat-input-row input { flex: 1; background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.15); border-radius: 4px; color: rgba(255,255,255,0.8); font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; padding: 0.3rem 0.5rem; outline: none; }
+.chat-input-row input:focus { border-color: #0ff; }
+.chat-input-row button { background: rgba(0,255,255,0.08); border: 1px solid rgba(0,255,255,0.25); border-radius: 4px; color: #0ff; font-family: 'Orbitron', monospace; font-size: 0.6rem; padding: 0.3rem 0.8rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; }
+.chat-input-row button:hover { background: rgba(0,255,255,0.15); border-color: #0ff; }
+.client-badge .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
+.client-badge .status-dot.online { background: #0f0; box-shadow: 0 0 4px rgba(0,255,0,0.5); }
+.client-badge .status-dot.offline { background: #666; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
 .modal-box { background: #0d0d14; border: 1px solid rgba(0,255,255,0.2); border-radius: 12px; padding: 2.5rem; max-width: 420px; width: 90%; text-align: center; box-shadow: 0 0 40px rgba(0,255,255,0.1), inset 0 0 30px rgba(0,255,255,0.02); }
 .modal-box h2 { font-family: 'Orbitron', monospace; font-size: 1.1rem; letter-spacing: 4px; color: #0ff; margin-bottom: 0.5rem; }
@@ -130,6 +148,15 @@ body::after {
   <div class="speech-container"><div id="speech" class="idle">Esperando señal...</div></div>
   <div class="viz-bars" id="vizBars"></div>
   <div class="notif-log" id="notifLog"></div>
+  <div class="chat-section">
+    <div class="chat-header">▸ chat de red ▸</div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <select id="chatTarget"></select>
+      <input type="text" id="chatInput" placeholder="mensaje..." maxlength="500" autocomplete="off">
+      <button id="chatSend">ENVIAR</button>
+    </div>
+  </div>
   <div class="footer">▸ sistema de voz neural ▸</div>
   <button id="activateAudio" class="activate-btn" style="display:none;">🔊 Activar audio</button>
 </div>
@@ -166,7 +193,6 @@ const modalHint = document.getElementById('modalHint');
 
 let myName = localStorage.getItem('nexus_name');
 let clientList = [];
-let voiceTargets = [];
 let speechUnlocked = false;
 let speaking = false;
 let listening = false;
@@ -230,7 +256,7 @@ function saveName(name) {
     fetch('/api/client/' + encodeURIComponent(oldName), { method: 'DELETE' });
     pollingActive = false;
   }
-  startPolling();
+  connect();
   setTimeout(() => playBeep(), 500);
 }
 
@@ -277,7 +303,7 @@ document.addEventListener('click', unlockSpeech, { once: true });
 document.addEventListener('touchstart', unlockSpeech, { once: true });
 document.addEventListener('keydown', unlockSpeech, { once: true });
 
-function renderClients(clients, targets) {
+function renderClients(clients) {
   clientBar.innerHTML = '';
   const sorted = [...clients].sort((a, b) => {
     if (a.name === myName) return -1;
@@ -287,9 +313,10 @@ function renderClients(clients, targets) {
   sorted.forEach(c => {
     const badge = document.createElement('span');
     const isSelf = c.name === myName;
-    const isVoiceOn = targets.includes(c.name);
+    const isVoiceOn = c.voiceEnabled;
+    const isOnline = c.connected !== false;
     badge.className = 'client-badge ' + (isVoiceOn ? 'voice-on' : 'voice-off') + (isSelf ? ' self' : '');
-    badge.textContent = c.name;
+    badge.innerHTML = '<span class="status-dot ' + (isOnline ? 'online' : 'offline') + '"></span>' + c.name;
     if (!isSelf) {
       badge.title = isVoiceOn ? `Voz ACTIVADA para ${c.name} — click para desactivar` : `Voz desactivada para ${c.name} — click para activar`;
       badge.addEventListener('click', () => {
@@ -359,22 +386,39 @@ function setConnected(connected) {
 
 let ttsQueue = [];
 let ttsPlaying = false;
+const TTS_QUEUE_MAX = 20;
+const TTS_QUEUE_TTL = 5 * 60 * 1000;
 
-function speakText(text) {
+function speakText(text, ts) {
   if (!text) return;
   speech.textContent = text;
   setSpeaking(true);
   if (!speechUnlocked) unlockSpeech();
   playBeep();
-  ttsQueue.push(text);
+
+  const now = Date.now();
+  ttsQueue = ttsQueue.filter(item => now - (item.ts || now) < TTS_QUEUE_TTL);
+  const item = { text, ts: ts || now };
+
+  let inserted = false;
+  for (let i = 0; i < ttsQueue.length; i++) {
+    if (ttsQueue[i].ts > item.ts) {
+      ttsQueue.splice(i, 0, item);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) ttsQueue.push(item);
+  if (ttsQueue.length > TTS_QUEUE_MAX) ttsQueue.splice(0, ttsQueue.length - TTS_QUEUE_MAX);
+
   processTTSQueue();
 }
 
 function processTTSQueue() {
   if (ttsPlaying || ttsQueue.length === 0) return;
   ttsPlaying = true;
-  const text = ttsQueue.shift();
-  trySpeechFirst(text, () => {
+  const item = ttsQueue.shift();
+  trySpeechFirst(item.text, () => {
     ttsPlaying = false;
     if (ttsQueue.length > 0) {
       setTimeout(processTTSQueue, 200);
@@ -393,8 +437,18 @@ function trySpeechFirst(text, onDone) {
 
   console.log('Trying speechSynthesis for:', text);
   let done = false;
-  const finish = () => { if (!done) { done = true; onDone(); } };
-  const fallback = () => { if (!done) { done = true; console.log('speechSynthesis failed, fallback to espeak-ng'); serverTTS(text, onDone); } };
+  let timeout = null;
+  const finish = () => { clearTimeout(timeout); if (!done) { done = true; onDone(); } };
+  const fallback = () => {
+    if (done) return;
+    if (window.speechSynthesis.speaking) {
+      timeout = setTimeout(fallback, 3000);
+      return;
+    }
+    done = true;
+    console.log('speechSynthesis failed, fallback to server TTS');
+    serverTTS(text, onDone);
+  };
 
   try {
     window.speechSynthesis.cancel();
@@ -405,7 +459,7 @@ function trySpeechFirst(text, onDone) {
     utter.onend = () => { finish(); };
     utter.onerror = () => { fallback(); };
     window.speechSynthesis.speak(utter);
-    setTimeout(fallback, 5000);
+    timeout = setTimeout(fallback, 30000);
   } catch (e) { fallback(); }
 }
 
@@ -484,17 +538,15 @@ let pollTimer = null;
 function handleEvent(d) {
   if (d.type === 'connected') {
     clientList = d.clients || [];
-    voiceTargets = d.voiceTargets || [];
-    renderClients(clientList, voiceTargets);
+    renderClients(clientList);
   } else if (d.type === 'clients') {
     clientList = d.clients || [];
-    voiceTargets = d.voiceTargets || [];
-    renderClients(clientList, voiceTargets);
+    renderClients(clientList);
   } else if (d.type === 'notification') {
-    const amIVoiceTarget = voiceTargets.includes(myName);
-    addNotif(d.text, amIVoiceTarget);
+    const myClient = clientList.find(c => c.name === myName);
+    addNotif(d.text, myClient ? myClient.voiceEnabled : false);
   } else if (d.type === 'speak') {
-    speakText(d.text);
+    speakText(d.text, d.timestamp);
   } else if (d.type === 'show_text') {
     speech.textContent = d.text;
   } else if (d.type === 'listening') {
@@ -504,28 +556,29 @@ function handleEvent(d) {
     setListening(true);
     speech.textContent = 'Grabando...';
     startMicCapture(d.timeout || 10);
+  } else if (d.type === 'chat') {
+    addChatMessage(d.from || 'sistema', d.text, false);
   }
 }
 
 function startPolling() {
-  if (pollingActive) return;
+  if (pollingActive || wsConnected) return;
   pollingActive = true;
   pollLastSeen = 0;
-  console.log('[POLL] Starting long polling');
+  console.log('[POLL] Iniciando long-polling');
   pollLoop();
 }
 
 function pollLoop() {
   if (!myName || !pollingActive) { pollingActive = false; return; }
 
-  fetch('/api/poll?name=' + encodeURIComponent(myName) + '&since=' + pollLastSeen)
+  fetch('/api/poll?name=' + encodeURIComponent(myName) + '&since=' + pollLastSeen + '&_=' + Date.now(), { cache: 'no-store' })
     .then(r => r.json())
     .then(data => {
       setConnected(true);
       if (data.clients) {
         clientList = data.clients;
-        voiceTargets = data.voiceTargets || [];
-        renderClients(clientList, voiceTargets);
+        renderClients(clientList);
       }
       if (data.events) {
         data.events.forEach(d => {
@@ -545,12 +598,8 @@ function pollLoop() {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && myName) {
-    if (!pollingActive) startPolling();
+    if (!wsConnected && !pollingActive && !wsFallbackTimer) connect();
   }
-});
-
-window.addEventListener('load', () => {
-  if (myName) setTimeout(startPolling, 500);
 });
 
 function pcmToWav(pcmData, sampleRate) {
@@ -610,6 +659,138 @@ function startMicCapture(timeout) {
     })
     .catch(() => setListening(false));
 }
+
+// ─── WebSocket Connection ───────────────────────────────────────────────
+let wsReconnectTimer = null;
+let wsFallbackTimer = null;
+let wsConnected = false;
+let chatMessages = [];
+let chatTargetSelect = null;
+let chatMessagesEl = null;
+let chatInput = null;
+
+function connect() {
+  if (!myName) return;
+  if (wsConnected) return;
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  clearTimeout(wsReconnectTimer);
+  clearTimeout(wsFallbackTimer);
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host);
+  ws.onopen = () => {
+    wsConnected = true;
+    pollingActive = false;
+    clearTimeout(pollTimer);
+    clearTimeout(wsFallbackTimer);
+    ws.send(JSON.stringify({ type: 'register', name: myName }));
+    console.log('[WS] Conectado');
+  };
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'event') {
+      handleEvent(msg.event);
+    } else if (msg.type === 'connected') {
+      clientList = msg.clients || [];
+      renderClients(clientList);
+      if (msg.events) msg.events.forEach(d => handleEvent(d));
+    } else if (msg.type === 'chat') {
+      addChatMessage(msg.from || 'sistema', msg.text, false);
+    }
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    setConnected(false);
+    console.log('[WS] Desconectado');
+    if (!pollingActive) startPolling();
+    wsReconnectTimer = setTimeout(connect, 5000);
+  };
+  ws.onerror = () => { wsConnected = false; };
+  wsFallbackTimer = setTimeout(() => {
+    if (!wsConnected && !pollingActive) {
+      console.log('[WS] Timeout, fallback a polling');
+      startPolling();
+    }
+  }, 2000);
+}
+
+// ─── Chat entre terminales ──────────────────────────────────────────────
+function initChat() {
+  chatMessagesEl = document.getElementById('chatMessages');
+  chatTargetSelect = document.getElementById('chatTarget');
+  chatInput = document.getElementById('chatInput');
+  document.getElementById('chatSend').addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+}
+
+function updateChatTargets(clients) {
+  if (!chatTargetSelect) return;
+  const prev = chatTargetSelect.value;
+  chatTargetSelect.innerHTML = '';
+  clients.filter(c => c.name !== myName).forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.textContent = c.name + (c.connected ? '' : ' (offline)');
+    chatTargetSelect.appendChild(opt);
+  });
+  const bc = document.createElement('option');
+  bc.value = '*';
+  bc.textContent = '* broadcast a todos';
+  chatTargetSelect.appendChild(bc);
+  if (prev && chatTargetSelect.querySelector('option[value="' + prev + '"]')) {
+    chatTargetSelect.value = prev;
+  }
+}
+
+function addChatMessage(from, text, isSelf) {
+  if (!chatMessagesEl) return;
+  const now = new Date();
+  const ts = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const div = document.createElement('div');
+  div.className = 'chat-msg' + (isSelf ? ' self' : '');
+  div.innerHTML = '<span class="chat-from">' + from + '</span><span class="chat-text">' + text + '</span><span class="chat-time">' + ts + '</span>';
+  chatMessagesEl.appendChild(div);
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  while (chatMessagesEl.children.length > 100) chatMessagesEl.removeChild(chatMessagesEl.firstChild);
+}
+
+function sendChat() {
+  if (!chatInput || !chatTargetSelect) return;
+  const text = chatInput.value.trim();
+  const to = chatTargetSelect.value;
+  if (!text || !to) return;
+  chatInput.value = '';
+
+  if (wsConnected && ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'chat', to, text }));
+  } else if (to === '*') {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, eventType: 'chat', broadcast: true })
+    }).catch(() => {});
+  } else {
+    fetch('/api/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: myName, to, text })
+    }).catch(() => {});
+  }
+  addChatMessage(myName, text, true);
+}
+
+// Init chat + WS on load
+window.addEventListener('load', () => {
+  initChat();
+  if (myName) setTimeout(connect, 500);
+});
+
+// Override renderClients to also update chat targets
+const _origRenderClients = renderClients;
+renderClients = function(clients) {
+  _origRenderClients(clients);
+  updateChatTargets(clients);
+};
 </script>
 </body>
 </html>
